@@ -1,0 +1,124 @@
+<?xml version='1.0' standalone='yes'?>
+<!DOCTYPE PLUGIN [
+  <!ENTITY name      "r8152-driver">
+  <!ENTITY author    "jinlife">
+  <!ENTITY version   "2023.07.01">
+  <!ENTITY gitURL    "https://raw.githubusercontent.com/&author;/unraid-r8125-r8152-driver/master">
+  <!ENTITY pluginURL "&gitURL;/unraid-r8125.plg">
+  <!ENTITY plugin    "/boot/config/plugins/&name;">
+  <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
+  <!ENTITY packages  "/boot/config/plugins/&name;/packages">
+]>
+
+<PLUGIN  name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="6.12.2" support="https://forums.unraid.net/">
+
+<CHANGES>
+
+###2023.07.01
+- Initial release
+
+</CHANGES>
+
+<FILE Name="&emhttp;/README.md">
+<INLINE>
+**RTL8152 Drivers**
+  
+This package contains the Realtek OOT Drivers and installs them, a reboot is required after installing the plugin (upgrading to a newer Unraid version maybe needs a second reboot too).  
+  
+Source: https://github.com/jinlife/unraid-r8125-r8152-driver
+</INLINE>
+</FILE>
+
+<FILE Run="/bin/bash">
+<INLINE>
+
+download() {
+# Download r8152 package
+if wget -q -nc --show-progress --progress=bar:force:noscroll -O "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}" "${DL_URL}/${LAT_PACKAGE}" ; then
+  wget -q -nc --show-progress --progress=bar:force:noscroll -O "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}.md5" "${DL_URL}/${LAT_PACKAGE}.md5"
+  if [ "$(md5sum &packages;/${KERNEL_V%%-*}/${LAT_PACKAGE} | awk '{print $1}')" != "$(cat &packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}.md5 | awk '{print $1}')" ]; then
+    echo
+    echo "---CHECKSUM ERROR!---"
+    rm -rf &plugin; &emhttp;
+    exit 1
+  fi
+  echo
+  echo "-------------------Sucessfully downloaded RTL8152 package-------------------"
+else
+  echo
+  echo "-----------------------Can't download RTL8152 package-----------------------"
+  rm -rf &plugin; &emhttp;
+  exit 1
+fi
+}
+
+check() {
+if ! ls -1 &packages;/${KERNEL_V%%-*}/ | grep -q "${PACKAGE}" ; then
+  LAT_PACKAGE="$(wget -qO- https://api.github.com/repos/jinlife/unraid-r8125-r8152-driver/releases/tags/${KERNEL_V} | jq -r '.assets[].name' | grep "${PACKAGE}" | grep -E -v '\.md5$' | sort -V | tail -1)"
+  echo
+  echo "-----------------------Downloading RTL8152 package!-------------------------"
+  echo "--------This could take some time, please don't close this window!----------"
+  download
+else
+  echo
+  echo "-----------------------RTL8152 package found locally------------------------"
+fi
+}
+
+# Define Variables
+KERNEL_V="$(uname -r)"
+PACKAGE="r8152"
+DL_URL="https://github.com/jinlife/unraid-r8125-r8152-driver/releases/download/$KERNEL_V"
+
+if [ ! -d "&packages;/${KERNEL_V%%-*}" ]; then
+  mkdir -p "&packages;/${KERNEL_V%%-*}"
+fi
+
+# Check for old packages
+rm -rf $(ls -d &packages;/* | grep -v "${KERNEL_V%%-*}")
+
+# Check if RTL8152 package is already downloaded and installed
+check
+
+if [ ! -f "&plugin;/&name;.png" ]; then
+  wget -q -nc --show-progress --progress=bar:force:noscroll -O "&plugin;/&name;.png" "https://raw.githubusercontent.com/ich777/docker-templates/master/ich777/images/realtek.png"
+fi
+
+#Install icon
+if [ ! -f "&emhttp;/images/&name;.png" ]; then
+  if [ ! -d "&emhttp;/images" ]; then
+    mkdir -p &emhttp;/images
+  fi
+  cp &plugin;/&name;.png &emhttp;/images/
+fi
+
+if [[ $(modinfo r8152 | grep -w "version:" | cut -d 'v' -f3) == 2* ]]; then
+  echo
+  echo "-----------Nothing to do, OOT RTL8152 package already installed-------------"
+  echo
+else
+  echo
+  echo "-----------Please reboot your server to activate the OOT driver!------------"
+  echo
+fi
+
+</INLINE>
+</FILE>
+
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+
+echo "--------------------------"
+echo "---Uninstalling RTL8152---"
+echo "--------------------------"
+rm -rf &emhttp;
+rm -rf &plugin;
+echo
+echo "-----------------------------------------------------"
+echo "---RTL8152 uninstalled, please reboot your server!---"
+echo "-----------------------------------------------------"
+echo
+
+</INLINE>
+</FILE>
+</PLUGIN>

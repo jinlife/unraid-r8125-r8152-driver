@@ -1,0 +1,140 @@
+<?xml version='1.0' standalone='yes'?>
+<!DOCTYPE PLUGIN [
+  <!ENTITY name      "r8125-driver">
+  <!ENTITY author    "jinlife">
+  <!ENTITY version   "2023.07.01">
+  <!ENTITY gitURL    "https://raw.githubusercontent.com/&author;/unraid-r8125-r8152-driver/master">
+  <!ENTITY pluginURL "&gitURL;/unraid-r8125.plg">
+  <!ENTITY plugin    "/boot/config/plugins/&name;">
+  <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
+  <!ENTITY packages  "/boot/config/plugins/&name;/packages">
+]>
+
+<PLUGIN  name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="6.12.2" support="https://forums.unraid.net/">
+
+<CHANGES>
+
+###2023.07.01
+- Initial release
+
+</CHANGES>
+
+<FILE Name="&emhttp;/README.md">
+<INLINE>
+**RTL8125 Drivers**
+  
+This package contains the Realtek OOT Drivers and installs them, a reboot is required after installing the plugin (upgrading to a newer Unraid version maybe needs a second reboot too).  
+  
+Source: https://github.com/jinlife/unraid-r8125-r8152-driver
+</INLINE>
+</FILE>
+
+<FILE Run="/bin/bash">
+<INLINE>
+
+download() {
+# Download r8125 package
+if wget -q -nc --show-progress --progress=bar:force:noscroll -O "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}" "${DL_URL}/${LAT_PACKAGE}" ; then
+  wget -q -nc --show-progress --progress=bar:force:noscroll -O "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}.md5" "${DL_URL}/${LAT_PACKAGE}.md5"
+  if [ "$(md5sum &packages;/${KERNEL_V%%-*}/${LAT_PACKAGE} | awk '{print $1}')" != "$(cat &packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}.md5 | awk '{print $1}')" ]; then
+    echo
+    echo "---CHECKSUM ERROR!---"
+    rm -rf &plugin; &emhttp;
+    exit 1
+  fi
+  echo
+  echo "-------------------Sucessfully downloaded RTL8125 package-------------------"
+else
+  echo
+  echo "-----------------------Can't download RTL8125 package-----------------------"
+  rm -rf &plugin; &emhttp;
+  exit 1
+fi
+}
+
+check() {
+if ! ls -1 &packages;/${KERNEL_V%%-*}/ | grep -q "${PACKAGE}" ; then
+  LAT_PACKAGE="$(wget -qO- https://api.github.com/repos/jinlife/unraid-r8125-r8152-driver/releases/tags/${KERNEL_V} | jq -r '.assets[].name' | grep "${PACKAGE}" | grep -E -v '\.md5$' | sort -V | tail -1)"
+  echo
+  echo "-----------------------Downloading RTL8125 package!-------------------------"
+  echo "--------This could take some time, please don't close this window!----------"
+  download
+else
+  echo
+  echo "-----------------------RTL8125 package found locally------------------------"
+fi
+}
+
+# Define Variables
+KERNEL_V="$(uname -r)"
+PACKAGE="r8125"
+DL_URL="https://github.com/jinlife/unraid-r8125-r8152-driver/releases/download/$KERNEL_V"
+
+if [ ! -d "&packages;/${KERNEL_V%%-*}" ]; then
+  mkdir -p "&packages;/${KERNEL_V%%-*}"
+fi
+
+# Check for old packages
+rm -rf $(ls -d &packages;/* | grep -v "${KERNEL_V%%-*}")
+
+# Check if RTL8125 package is already downloaded and installed
+check
+
+if [ ! -f "&plugin;/&name;.png" ]; then
+  wget -q -nc --show-progress --progress=bar:force:noscroll -O "&plugin;/&name;.png" "https://raw.githubusercontent.com/ich777/docker-templates/master/ich777/images/realtek.png"
+fi
+
+#Install icon
+if [ ! -f "&emhttp;/images/&name;.png" ]; then
+  if [ ! -d "&emhttp;/images" ]; then
+    mkdir -p &emhttp;/images
+  fi
+  cp &plugin;/&name;.png &emhttp;/images/
+fi
+
+#Check if r8169 module is already blacklisted
+if [ ! "$(grep "blacklist" /boot/config/modprobe.d/r8169.conf 2>/dev/null)" ]; then
+  if [ ! -d /boot/config/modprobe.d ]; then
+    mkdir -p /boot/config/modprobe.d
+  fi
+  echo "----Blacklisting r8169 module to ensure module r8125 is working properly----"
+  echo "blacklist r8169" >> /boot/config/modprobe.d/r8169.conf
+fi
+
+# Check if module is found, if not display message to reboot
+if modinfo r8125 2>/dev/null ; then
+  echo
+  echo "-----------Nothing to do, OOT RTL8125 package already installed-------------"
+  echo
+else
+  echo
+  echo "-----------Please reboot your server to activate the OOT driver!------------"
+  echo
+fi
+
+</INLINE>
+</FILE>
+
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+
+echo "--------------------------"
+echo "---Uninstalling RTL8125---"
+echo "--------------------------"
+# Remove plugin related files
+if [ "$(grep -v "blacklist" /boot/config/modprobe.d/r8169.conf 2>/dev/null)" ]; then
+  sed -i '/blacklist r8169/d' /boot/config/modprobe.d/r8169.conf 2>/dev/null
+else
+  rm -rf /boot/config/modprobe.d/r8169.conf 2>/dev/null
+fi
+rm -rf &emhttp;
+rm -rf &plugin;
+echo
+echo "-----------------------------------------------------"
+echo "---RTL8125 uninstalled, please reboot your server!---"
+echo "-----------------------------------------------------"
+echo
+
+</INLINE>
+</FILE>
+</PLUGIN>
