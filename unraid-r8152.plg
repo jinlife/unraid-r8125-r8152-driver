@@ -2,7 +2,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "r8152-driver">
   <!ENTITY author    "jinlife">
-  <!ENTITY version   "2023.07.08">
+  <!ENTITY version   "2023.07.01">
   <!ENTITY gitURL    "https://raw.githubusercontent.com/&author;/unraid-r8125-r8152-driver/main">
   <!ENTITY pluginURL "&gitURL;/unraid-r8152.plg">
   <!ENTITY plugin    "/boot/config/plugins/&name;">
@@ -13,9 +13,6 @@
 <PLUGIN  name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="6.11.5" support="https://forums.unraid.net/topic/141349-plugin-realtek-r8125-and-r8152-drivers/">
 
 <CHANGES>
-
-###2023.07.08
-- Add Plugin-Update-Helper
 
 ###2023.07.01
 - Initial release
