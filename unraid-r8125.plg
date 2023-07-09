@@ -2,7 +2,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "r8125-driver">
   <!ENTITY author    "jinlife">
-  <!ENTITY version   "2023.07.08a">
+  <!ENTITY version   "2023.07.09">
   <!ENTITY gitURL    "https://raw.githubusercontent.com/&author;/unraid-r8125-r8152-driver/main">
   <!ENTITY pluginURL "&gitURL;/unraid-r8125.plg">
   <!ENTITY plugin    "/boot/config/plugins/&name;">
@@ -13,6 +13,9 @@
 <PLUGIN  name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="6.11.5" support="https://forums.unraid.net/topic/141349-plugin-realtek-r8125-and-r8152-drivers/">
 
 <CHANGES>
+
+###2023.07.09
+- Remove blacklist from r8169 module and load module r8169 if download failed
 
 ###2023.07.08a
 - Force update from the Plugin-Update-Helper
@@ -46,6 +49,7 @@ if wget -q -nc --show-progress --progress=bar:force:noscroll -O "&packages;/${KE
     echo
     echo "---CHECKSUM ERROR!---"
     rm -rf &plugin; &emhttp;
+    remove_blacklist_r8169
     exit 1
   fi
   echo
@@ -54,6 +58,7 @@ else
   echo
   echo "-----------------------Can't download RTL8125 package-----------------------"
   rm -rf &plugin; &emhttp;
+  remove_blacklist_r8169
   exit 1
 fi
 }
@@ -69,6 +74,15 @@ else
   echo
   echo "-----------------------RTL8125 package found locally------------------------"
 fi
+}
+
+remove_blacklist_r8169() {
+if [ "$(grep -v "blacklist" /boot/config/modprobe.d/r8169.conf 2>/dev/null)" ]; then
+  sed -i '/blacklist r8169/d' /boot/config/modprobe.d/r8169.conf 2>/dev/null
+else
+  rm -rf /boot/config/modprobe.d/r8169.conf 2>/dev/null
+fi
+modprobe r8169 2>/dev/null
 }
 
 # Define Variables
