@@ -82,7 +82,7 @@ if [ "$(grep -v "blacklist" /boot/config/modprobe.d/r8169.conf 2>/dev/null)" ]; 
 else
   rm -rf /boot/config/modprobe.d/r8169.conf 2>/dev/null
 fi
-modprobe r8169 2>/dev/null
+/sbin/modprobe r8169 2>/dev/null
 }
 
 # Define Variables
