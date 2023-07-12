@@ -2,7 +2,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "r8152-driver">
   <!ENTITY author    "jinlife">
-  <!ENTITY version   "2023.07.08a">
+  <!ENTITY version   "2023.07.12">
   <!ENTITY gitURL    "https://raw.githubusercontent.com/&author;/unraid-r8125-r8152-driver/main">
   <!ENTITY pluginURL "&gitURL;/unraid-r8152.plg">
   <!ENTITY plugin    "/boot/config/plugins/&name;">
@@ -13,6 +13,9 @@
 <PLUGIN  name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="6.11.5" support="https://forums.unraid.net/topic/141349-plugin-realtek-r8125-and-r8152-drivers/">
 
 <CHANGES>
+
+###2023.07.12
+- Bugfix for error message in terminal if package download failed
 
 ###2023.07.08a
 - Force update from the Plugin-Update-Helper
@@ -40,7 +43,7 @@ Source: https://github.com/jinlife/unraid-r8125-r8152-driver
 
 download() {
 # Download r8152 package
-if wget -q -nc --show-progress --progress=bar:force:noscroll -O "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}" "${DL_URL}/${LAT_PACKAGE}" ; then
+if wget -q -nc --show-progress --progress=bar:force:noscroll -O "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}" "${DL_URL}/${LAT_PACKAGE}" 2>/dev/null ; then
   wget -q -nc --show-progress --progress=bar:force:noscroll -O "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}.md5" "${DL_URL}/${LAT_PACKAGE}.md5"
   if [ "$(md5sum &packages;/${KERNEL_V%%-*}/${LAT_PACKAGE} | awk '{print $1}')" != "$(cat &packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}.md5 | awk '{print $1}')" ]; then
     echo
