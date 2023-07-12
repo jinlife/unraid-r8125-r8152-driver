@@ -2,7 +2,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "r8125-driver">
   <!ENTITY author    "jinlife">
-  <!ENTITY version   "2023.07.09">
+  <!ENTITY version   "2023.07.12">
   <!ENTITY gitURL    "https://raw.githubusercontent.com/&author;/unraid-r8125-r8152-driver/main">
   <!ENTITY pluginURL "&gitURL;/unraid-r8125.plg">
   <!ENTITY plugin    "/boot/config/plugins/&name;">
@@ -13,6 +13,10 @@
 <PLUGIN  name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="6.11.5" support="https://forums.unraid.net/topic/141349-plugin-realtek-r8125-and-r8152-drivers/">
 
 <CHANGES>
+
+###2023.07.12
+- Restart network if package download failed to get a valid IP address on boot with the in tree driver
+- Bugfix for error message in terminal if package download failed
 
 ###2023.07.09
 - Remove blacklist from r8169 module and load module r8169 if download failed
@@ -43,7 +47,7 @@ Source: https://github.com/jinlife/unraid-r8125-r8152-driver
 
 download() {
 # Download r8125 package
-if wget -q -nc --show-progress --progress=bar:force:noscroll -O "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}" "${DL_URL}/${LAT_PACKAGE}" ; then
+if wget -q -nc --show-progress --progress=bar:force:noscroll -O "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}" "${DL_URL}/${LAT_PACKAGE}" 2>/dev/null ; then
   wget -q -nc --show-progress --progress=bar:force:noscroll -O "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}.md5" "${DL_URL}/${LAT_PACKAGE}.md5"
   if [ "$(md5sum &packages;/${KERNEL_V%%-*}/${LAT_PACKAGE} | awk '{print $1}')" != "$(cat &packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}.md5 | awk '{print $1}')" ]; then
     echo
@@ -83,6 +87,7 @@ else
   rm -rf /boot/config/modprobe.d/r8169.conf 2>/dev/null
 fi
 /sbin/modprobe r8169 2>/dev/null
+/etc/rc.d/rc.inet1 restart 2>/dev/null
 }
 
 # Define Variables
