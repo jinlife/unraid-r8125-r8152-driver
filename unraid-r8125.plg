@@ -2,7 +2,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "r8125-driver">
   <!ENTITY author    "jinlife">
-  <!ENTITY version   "2023.07.12">
+  <!ENTITY version   "2023.07.13">
   <!ENTITY gitURL    "https://raw.githubusercontent.com/&author;/unraid-r8125-r8152-driver/main">
   <!ENTITY pluginURL "&gitURL;/unraid-r8125.plg">
   <!ENTITY plugin    "/boot/config/plugins/&name;">
@@ -13,6 +13,9 @@
 <PLUGIN  name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="6.11.5" support="https://forums.unraid.net/topic/141349-plugin-realtek-r8125-and-r8152-drivers/">
 
 <CHANGES>
+
+###2023.07.13
+- Don't remove blacklist if r8168 plugin is installed
 
 ###2023.07.12
 - Restart network if package download failed to get a valid IP address on boot with the in tree driver
@@ -53,7 +56,9 @@ if wget -q -nc --show-progress --progress=bar:force:noscroll -O "&packages;/${KE
     echo
     echo "---CHECKSUM ERROR!---"
     rm -rf &plugin; &emhttp;
-    remove_blacklist_r8169
+    if [ ! -f /boot/config/plugins/unraid-r8168.plg ]; then
+      remove_blacklist_r8169
+    fi
     exit 1
   fi
   echo
@@ -62,7 +67,9 @@ else
   echo
   echo "-----------------------Can't download RTL8125 package-----------------------"
   rm -rf &plugin; &emhttp;
-  remove_blacklist_r8169
+  if [ ! -f /boot/config/plugins/unraid-r8168.plg ]; then
+    remove_blacklist_r8169
+  fi
   exit 1
 fi
 }
@@ -187,10 +194,12 @@ echo "--------------------------"
 echo "---Uninstalling RTL8125---"
 echo "--------------------------"
 # Remove plugin related files
-if [ "$(grep -v "blacklist" /boot/config/modprobe.d/r8169.conf 2>/dev/null)" ]; then
-  sed -i '/blacklist r8169/d' /boot/config/modprobe.d/r8169.conf 2>/dev/null
-else
-  rm -rf /boot/config/modprobe.d/r8169.conf 2>/dev/null
+if [ ! -f /boot/config/plugins/unraid-r8168.plg ]; then
+  if [ "$(grep -v "blacklist" /boot/config/modprobe.d/r8169.conf 2>/dev/null)" ]; then
+    sed -i '/blacklist r8169/d' /boot/config/modprobe.d/r8169.conf 2>/dev/null
+  else
+    rm -rf /boot/config/modprobe.d/r8169.conf 2>/dev/null
+  fi
 fi
 rm -rf &emhttp;
 rm -rf &plugin;
