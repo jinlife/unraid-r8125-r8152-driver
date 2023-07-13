@@ -16,6 +16,7 @@
 
 ###2023.07.13
 - Initial release
+- Don't remove blacklist if r8125 plugin is installed
 
 </CHANGES>
 
@@ -40,7 +41,9 @@ if wget -q -nc --show-progress --progress=bar:force:noscroll -O "&packages;/${KE
     echo
     echo "---CHECKSUM ERROR!---"
     rm -rf &plugin; &emhttp;
-    remove_blacklist_r8169
+    if [ ! -f /boot/config/plugins/unraid-r8125.plg ]; then
+      remove_blacklist_r8169
+    fi
     exit 1
   fi
   echo
@@ -49,7 +52,9 @@ else
   echo
   echo "-----------------------Can't download RTL8168 package-----------------------"
   rm -rf &plugin; &emhttp;
-  remove_blacklist_r8169
+  if [ ! -f /boot/config/plugins/unraid-r8125.plg ]; then
+    remove_blacklist_r8169
+  fi
   exit 1
 fi
 }
@@ -174,10 +179,12 @@ echo "--------------------------"
 echo "---Uninstalling RTL8168---"
 echo "--------------------------"
 # Remove plugin related files
-if [ "$(grep -v "blacklist" /boot/config/modprobe.d/r8169.conf 2>/dev/null)" ]; then
-  sed -i '/blacklist r8169/d' /boot/config/modprobe.d/r8169.conf 2>/dev/null
-else
-  rm -rf /boot/config/modprobe.d/r8169.conf 2>/dev/null
+if [ ! -f /boot/config/plugins/unraid-r8125.plg ]; then
+  if [ "$(grep -v "blacklist" /boot/config/modprobe.d/r8169.conf 2>/dev/null)" ]; then
+    sed -i '/blacklist r8169/d' /boot/config/modprobe.d/r8169.conf 2>/dev/null
+  else
+    rm -rf /boot/config/modprobe.d/r8169.conf 2>/dev/null
+  fi
 fi
 rm -rf &emhttp;
 rm -rf &plugin;
