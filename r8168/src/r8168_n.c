@@ -55,12 +55,6 @@
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
 #include <linux/ipv6.h>
 #include <net/ip6_checksum.h>
-// Linux 6.4.10 added net/gso.h
-#if defined __has_include
-#if __has_include (<net/gso.h>)
-#include <net/gso.h>
-#endif
-#endif
 #endif
 #include <linux/tcp.h>
 #include <linux/init.h>
