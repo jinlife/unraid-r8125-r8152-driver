@@ -2,7 +2,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "r8152-driver">
   <!ENTITY author    "jinlife">
-  <!ENTITY version   "2023.12.04">
+  <!ENTITY version   "2023.12.10">
   <!ENTITY gitURL    "https://raw.githubusercontent.com/&author;/unraid-r8125-r8152-driver/main">
   <!ENTITY pluginURL "&gitURL;/unraid-r8152.plg">
   <!ENTITY plugin    "/boot/config/plugins/&name;">
@@ -13,6 +13,9 @@
 <PLUGIN  name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="6.11.5" support="https://forums.unraid.net/topic/141349-plugin-realtek-r8125-r8168-and-r8152-drivers/">
 
 <CHANGES>
+
+###2023.12.10
+- Blacklist all cdc modules to ensure driver is correctly working with Unraid 6.12.5+
 
 ###2023.12.04
 - Blacklist cdc_ncm Kernel module to ensure driver is correctly working with Unraid 6.12.5+
@@ -92,12 +95,21 @@ fi
 # Check for old packages
 rm -rf $(ls -d &packages;/* | grep -v "${KERNEL_V%%-*}")
 
-#Check if cdc_ncm module is already blacklisted if not blacklist it
+#Check if cdc modules are already blacklisted, blacklist them if not
+if [ ! -d /boot/config/modprobe.d ]; then
+  mkdir -p /boot/config/modprobe.d
+fi
+if [ ! "$(grep "blacklist" /boot/config/modprobe.d/cdc_ether.conf 2>/dev/null)" ]; then
+  echo "blacklist cdc_ether" >> /boot/config/modprobe.d/cdc_ether.conf
+fi
+if [ ! "$(grep "blacklist" /boot/config/modprobe.d/cdc_mbim.conf 2>/dev/null)" ]; then
+  echo "blacklist cdc_mbim" >> /boot/config/modprobe.d/cdc_mbim.conf
+fi
 if [ ! "$(grep "blacklist" /boot/config/modprobe.d/cdc_ncm.conf 2>/dev/null)" ]; then
-  if [ ! -d /boot/config/modprobe.d ]; then
-    mkdir -p /boot/config/modprobe.d
-  fi
   echo "blacklist cdc_ncm" >> /boot/config/modprobe.d/cdc_ncm.conf
+fi
+if [ ! "$(grep "blacklist" /boot/config/modprobe.d/r8153_ecm.conf 2>/dev/null)" ]; then
+  echo "blacklist r8153_ecm" >> /boot/config/modprobe.d/r8153_ecm.conf
 fi
 
 # Check if RTL8152 package is already downloaded and installed
@@ -174,10 +186,25 @@ fi
 echo "--------------------------"
 echo "---Uninstalling RTL8152---"
 echo "--------------------------"
+if [ "$(grep -v "blacklist" /boot/config/modprobe.d/cdc_ether.conf 2>/dev/null)" ]; then
+  sed -i '/blacklist cdc_ether/d' /boot/config/modprobe.d/cdc_ether.conf 2>/dev/null
+else
+  rm -f /boot/config/modprobe.d/cdc_ether.conf 2>/dev/null
+fi
+if [ "$(grep -v "blacklist" /boot/config/modprobe.d/cdc_mbim.conf 2>/dev/null)" ]; then
+  sed -i '/blacklist cdc_mbim/d' /boot/config/modprobe.d/cdc_mbim.conf 2>/dev/null
+else
+  rm -f /boot/config/modprobe.d/cdc_mbim.conf 2>/dev/null
+fi
 if [ "$(grep -v "blacklist" /boot/config/modprobe.d/cdc_ncm.conf 2>/dev/null)" ]; then
   sed -i '/blacklist cdc_ncm/d' /boot/config/modprobe.d/cdc_ncm.conf 2>/dev/null
 else
   rm -f /boot/config/modprobe.d/cdc_ncm.conf 2>/dev/null
+fi
+if [ "$(grep -v "blacklist" /boot/config/modprobe.d/r8153_ecm.conf 2>/dev/null)" ]; then
+  sed -i '/blacklist r8153_ecm/d' /boot/config/modprobe.d/r8153_ecm.conf 2>/dev/null
+else
+  rm -f /boot/config/modprobe.d/r8153_ecm.conf 2>/dev/null
 fi
 rm -rf &emhttp;
 rm -rf &plugin;
