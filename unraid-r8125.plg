@@ -2,7 +2,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "r8125-driver">
   <!ENTITY author    "jinlife">
-  <!ENTITY version   "2023.11.15">
+  <!ENTITY version   "2024.01.03">
   <!ENTITY gitURL    "https://raw.githubusercontent.com/&author;/unraid-r8125-r8152-driver/main">
   <!ENTITY pluginURL "&gitURL;/unraid-r8125.plg">
   <!ENTITY plugin    "/boot/config/plugins/&name;">
@@ -13,6 +13,9 @@
 <PLUGIN  name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="6.11.5" support="https://forums.unraid.net/topic/141349-plugin-realtek-r8125-r8168-and-r8152-drivers/">
 
 <CHANGES>
+###2024.01.03
+- Bump version to 9.012.04 and disable noisy log info rss get rxnfc
+
 ###2023.11.15
 - Bump version to 9.012.03
 
