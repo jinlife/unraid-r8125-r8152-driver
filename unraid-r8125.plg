@@ -2,7 +2,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "r8125-driver">
   <!ENTITY author    "jinlife">
-  <!ENTITY version   "2024.01.03">
+  <!ENTITY version   "2024.04.04">
   <!ENTITY gitURL    "https://raw.githubusercontent.com/&author;/unraid-r8125-r8152-driver/main">
   <!ENTITY pluginURL "&gitURL;/unraid-r8125.plg">
   <!ENTITY plugin    "/boot/config/plugins/&name;">
