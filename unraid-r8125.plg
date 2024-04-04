@@ -13,6 +13,9 @@
 <PLUGIN  name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="6.11.5" support="https://forums.unraid.net/topic/141349-plugin-realtek-r8125-r8168-and-r8152-drivers/">
 
 <CHANGES>
+###2024.04.04
+- Bump version to 9.013.02
+
 ###2024.01.03
 - Bump version to 9.012.04 and disable noisy log info rss get rxnfc
 

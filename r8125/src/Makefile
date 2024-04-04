@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: GPL-2.0-only
 ################################################################################
 #
-# r8125 is the Linux device driver released for Realtek 2.5/5 Gigabit Ethernet
+# r8125 is the Linux device driver released for Realtek 2.5 Gigabit Ethernet
 # controllers with PCI-Express interface.
 #
-# Copyright(c) 2023 Realtek Semiconductor Corp. All rights reserved.
+# Copyright(c) 2024 Realtek Semiconductor Corp. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the Free
@@ -35,7 +35,7 @@ ENABLE_REALWOW_SUPPORT = n
 ENABLE_DASH_SUPPORT = n
 ENABLE_DASH_PRINTER_SUPPORT = n
 CONFIG_DOWN_SPEED_100 = n
-CONFIG_ASPM = n
+CONFIG_ASPM = y
 ENABLE_S5WOL = y
 ENABLE_S5_KEEP_CURR_MAC = n
 ENABLE_EEE = y

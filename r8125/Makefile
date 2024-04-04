@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=r8125
-PKG_VERSION:=9.012.04
+PKG_VERSION:=9.013.02
 PKG_RELEASE:=1
 
 #PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
