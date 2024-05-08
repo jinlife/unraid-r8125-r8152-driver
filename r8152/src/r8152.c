@@ -19690,7 +19690,11 @@ static int rtltool_ioctl(struct r8152 *tp, struct ifreq *ifr)
 		uinfo->idVendor = __le16_to_cpu(udev->descriptor.idVendor);
 		uinfo->idProduct = __le16_to_cpu(udev->descriptor.idProduct);
 		uinfo->bcdDevice = __le16_to_cpu(udev->descriptor.bcdDevice);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,8,0)
+		strscpy(uinfo->devpath, udev->devpath, sizeof(udev->devpath));
+#else
 		strlcpy(uinfo->devpath, udev->devpath, sizeof(udev->devpath));
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(6,8,0) */
 		pla_ocp_read(tp, PLA_IDR, sizeof(uinfo->dev_addr),
 			     uinfo->dev_addr);
 
