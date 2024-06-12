@@ -1,54 +1,26 @@
 <?xml version='1.0' standalone='yes'?>
 <!DOCTYPE PLUGIN [
-  <!ENTITY name      "r8125-driver">
+  <!ENTITY name      "r8126-driver">
   <!ENTITY author    "jinlife">
-  <!ENTITY version   "2024.04.04">
+  <!ENTITY version   "2024.06.12">
   <!ENTITY gitURL    "https://raw.githubusercontent.com/&author;/unraid-r8125-r8152-driver/main">
-  <!ENTITY pluginURL "&gitURL;/unraid-r8125.plg">
+  <!ENTITY pluginURL "&gitURL;/unraid-r8126.plg">
   <!ENTITY plugin    "/boot/config/plugins/&name;">
   <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
   <!ENTITY packages  "/boot/config/plugins/&name;/packages">
 ]>
 
-<PLUGIN  name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="6.11.5" support="https://forums.unraid.net/topic/141349-plugin-realtek-r8125-r8168-and-r8152-drivers/">
+<PLUGIN  name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="6.12.10" support="https://forums.unraid.net/topic/141349-plugin-realtek-r8125-r8168-and-r8152-drivers/">
 
 <CHANGES>
-###2024.04.04
-- Bump version to 9.013.02
-
-###2024.01.03
-- Bump version to 9.012.04 and disable noisy log info rss get rxnfc
-
-###2023.11.15
-- Bump version to 9.012.03
-
-###2023.07.14
-- Update support URL
-
-###2023.07.13
-- Don't remove blacklist if r8168 plugin is installed
-
-###2023.07.12
-- Restart network if package download failed to get a valid IP address on boot with the in tree driver
-- Bugfix for error message in terminal if package download failed
-
-###2023.07.09
-- Remove blacklist from r8169 module and load module r8169 if download failed
-
-###2023.07.08a
-- Force update from the Plugin-Update-Helper
-
-###2023.07.08
-- Add Plugin-Update-Helper
-
-###2023.07.01
-- Initial release
+###2024.06.12
+- Initial release v10.013.00
 
 </CHANGES>
 
 <FILE Name="&emhttp;/README.md">
 <INLINE>
-**RTL8125 Drivers**
+**RTL8126 Drivers**
   
 This package contains the Realtek OOT Drivers and installs them, a reboot is required after installing the plugin (upgrading to a newer Unraid version maybe needs a second reboot too).  
   
@@ -60,25 +32,25 @@ Source: https://github.com/jinlife/unraid-r8125-r8152-driver
 <INLINE>
 
 download() {
-# Download r8125 package
+# Download r8126 package
 if wget -q -nc --show-progress --progress=bar:force:noscroll -O "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}" "${DL_URL}/${LAT_PACKAGE}" 2>/dev/null ; then
   wget -q -nc --show-progress --progress=bar:force:noscroll -O "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}.md5" "${DL_URL}/${LAT_PACKAGE}.md5"
   if [ "$(md5sum &packages;/${KERNEL_V%%-*}/${LAT_PACKAGE} | awk '{print $1}')" != "$(cat &packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}.md5 | awk '{print $1}')" ]; then
     echo
     echo "---CHECKSUM ERROR!---"
     rm -rf &plugin; &emhttp;
-	if [ ! -f /boot/config/plugins/unraid-r8168.plg ] && [ ! -f /boot/config/plugins/unraid-r8126.plg ]; then
+    if [ ! -f /boot/config/plugins/unraid-r8168.plg ] && [ ! -f /boot/config/plugins/unraid-r8125.plg ]; then
       remove_blacklist_r8169
     fi
     exit 1
   fi
   echo
-  echo "-------------------Sucessfully downloaded RTL8125 package-------------------"
+  echo "-------------------Sucessfully downloaded RTL8126 package-------------------"
 else
   echo
-  echo "-----------------------Can't download RTL8125 package-----------------------"
+  echo "-----------------------Can't download RTL8126 package-----------------------"
   rm -rf &plugin; &emhttp;
-  if [ ! -f /boot/config/plugins/unraid-r8168.plg ] && [ ! -f /boot/config/plugins/unraid-r8126.plg ]; then
+  if [ ! -f /boot/config/plugins/unraid-r8168.plg ] && [ ! -f /boot/config/plugins/unraid-r8125.plg ]; then
     remove_blacklist_r8169
   fi
   exit 1
@@ -89,12 +61,12 @@ check() {
 if ! ls -1 &packages;/${KERNEL_V%%-*}/ | grep -q "${PACKAGE}" ; then
   LAT_PACKAGE="$(wget -qO- https://api.github.com/repos/jinlife/unraid-r8125-r8152-driver/releases/tags/${KERNEL_V} | jq -r '.assets[].name' | grep "${PACKAGE}" | grep -E -v '\.md5$' | sort -V | tail -1)"
   echo
-  echo "-----------------------Downloading RTL8125 package!-------------------------"
+  echo "-----------------------Downloading RTL8126 package!-------------------------"
   echo "--------This could take some time, please don't close this window!----------"
   download
 else
   echo
-  echo "-----------------------RTL8125 package found locally------------------------"
+  echo "-----------------------RTL8126 package found locally------------------------"
 fi
 }
 
@@ -110,7 +82,7 @@ fi
 
 # Define Variables
 KERNEL_V="$(uname -r)"
-PACKAGE="r8125"
+PACKAGE="r8126"
 DL_URL="https://github.com/jinlife/unraid-r8125-r8152-driver/releases/download/$KERNEL_V"
 
 if [ ! -d "&packages;/${KERNEL_V%%-*}" ]; then
@@ -120,7 +92,7 @@ fi
 # Check for old packages
 rm -rf $(ls -d &packages;/* | grep -v "${KERNEL_V%%-*}")
 
-# Check if RTL8125 package is already downloaded and installed
+# Check if RTL8126 package is already downloaded and installed
 check
 
 if [ ! -f "&plugin;/&name;.png" ]; then
@@ -140,14 +112,14 @@ if [ ! "$(grep "blacklist" /boot/config/modprobe.d/r8169.conf 2>/dev/null)" ]; t
   if [ ! -d /boot/config/modprobe.d ]; then
     mkdir -p /boot/config/modprobe.d
   fi
-  echo "----Blacklisting r8169 module to ensure module r8125 is working properly----"
+  echo "----Blacklisting r8169 module to ensure module r8126 is working properly----"
   echo "blacklist r8169" >> /boot/config/modprobe.d/r8169.conf
 fi
 
 # Check if module is found, if not display message to reboot
-if modinfo r8125 2>/dev/null ; then
+if modinfo r8126 2>/dev/null ; then
   echo
-  echo "-----------Nothing to do, OOT RTL8125 package already installed-------------"
+  echo "-----------Nothing to do, OOT RTL8126 package already installed-------------"
   echo
 else
   echo
@@ -202,10 +174,10 @@ fi
 <INLINE>
 
 echo "--------------------------"
-echo "---Uninstalling RTL8125---"
+echo "---Uninstalling RTL8126---"
 echo "--------------------------"
 # Remove plugin related files
-if [ ! -f /boot/config/plugins/unraid-r8168.plg ] && [ ! -f /boot/config/plugins/unraid-r8126.plg ]; then
+if [ ! -f /boot/config/plugins/unraid-r8168.plg ] && [ ! -f /boot/config/plugins/unraid-r8125.plg ]; then
   if [ "$(grep -v "blacklist" /boot/config/modprobe.d/r8169.conf 2>/dev/null)" ]; then
     sed -i '/blacklist r8169/d' /boot/config/modprobe.d/r8169.conf 2>/dev/null
   else
@@ -216,7 +188,7 @@ rm -rf &emhttp;
 rm -rf &plugin;
 echo
 echo "-----------------------------------------------------"
-echo "---RTL8125 uninstalled, please reboot your server!---"
+echo "---RTL8126 uninstalled, please reboot your server!---"
 echo "-----------------------------------------------------"
 echo
 
