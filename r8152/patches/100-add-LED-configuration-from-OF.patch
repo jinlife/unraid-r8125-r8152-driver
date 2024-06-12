@@ -9,8 +9,8 @@ be determined.
 
 Signed-off-by: David Bauer <mail@david-bauer.net>
 ---
- r8152.c | 20 ++++++++++++++++++++
- 1 file changed, 20 insertions(+)
+ r8152.c | 23 +++++++++++++++++++++++
+ 1 file changed, 23 insertions(+)
 
 --- a/r8152.c
 +++ b/r8152.c
@@ -22,8 +22,8 @@ Signed-off-by: David Bauer <mail@david-bauer.net>
  #include <linux/crc32.h>
  #include <linux/if_vlan.h>
  #include <linux/uaccess.h>
-@@ -12596,6 +12597,22 @@ out:
- 	return ret;
+@@ -10122,6 +10123,22 @@ static void rtl_tally_reset(struct r8152
+ 	ocp_write_word(tp, MCU_TYPE_USB, 0xcbf0, ocp_data);
  }
  
 +static int r8152_led_configuration(struct r8152 *tp)
@@ -42,29 +42,33 @@ Signed-off-by: David Bauer <mail@david-bauer.net>
 +	return 0;
 +}
 +
- static int r8152b_init(struct r8152 *tp)
+ static void r8152b_init(struct r8152 *tp)
  {
- 	int ret;
- @@ -12696,6 +12713,7 @@ static int r8152b_init(struct r8152 *tp)
- 				RX_AGG_DISABLE | RX_ZERO_EN);
- 
- out:
-+   r8152_led_configuration(tp);
- 	return (ret < 0) ? ret : 0;
+ 	u32 ocp_data;
+@@ -10183,6 +10200,8 @@ static void r8152b_init(struct r8152 *tp
+ 	ocp_data = ocp_read_word(tp, MCU_TYPE_USB, USB_USB_CTRL);
+ 	ocp_data &= ~(RX_AGG_DISABLE | RX_ZERO_EN);
+ 	ocp_write_word(tp, MCU_TYPE_USB, USB_USB_CTRL, ocp_data);
++
++	r8152_led_configuration(tp);
  }
  
- @@ -12884,6 +12902,7 @@ static int r8153_init(struct r8152 *tp)
+ static void r8153_init(struct r8152 *tp)
+@@ -10326,6 +10345,8 @@ static void r8153_init(struct r8152 *tp)
+ 		tp->coalesce = COALESCE_SLOW;
+ 		break;
  	}
- 
- out:
++
 +	r8152_led_configuration(tp);
- 	return (ret < 0) ? ret : 0;
  }
  
- @@ -13014,6 +13033,7 @@ static int r8153b_init(struct r8152 *tp)
+ static void r8153b_init(struct r8152 *tp)
+@@ -10428,6 +10449,8 @@ static void r8153b_init(struct r8152 *tp
+ 	rtl_tally_reset(tp);
+ 
  	tp->coalesce = 15000;	/* 15 us */
- 
- out:
++
 +	r8152_led_configuration(tp);
- 	return (ret < 0) ? ret : 0;
  }
+ 
+ static void r8153c_init(struct r8152 *tp)
