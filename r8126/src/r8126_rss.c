@@ -91,7 +91,7 @@ int rtl8126_get_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd,
         struct rtl8126_private *tp = netdev_priv(dev);
         int ret = -EOPNOTSUPP;
 
-        netif_info(tp, drv, tp->dev, "rss get rxnfc\n");
+        //netif_info(tp, drv, tp->dev, "rss get rxnfc\n");
 
         if (!(dev->features & NETIF_F_RXHASH))
                 return ret;
@@ -324,28 +324,6 @@ static void rtl8126_get_reta(struct rtl8126_private *tp, u32 *indir)
                 indir[i] = tp->rss_indir_tbl[i];
 }
 
-int rtl8126_get_rxfh(struct net_device *dev, u32 *indir, u8 *key,
-                     u8 *hfunc)
-{
-        struct rtl8126_private *tp = netdev_priv(dev);
-
-        netif_info(tp, drv, tp->dev, "rss get rxfh\n");
-
-        if (!(dev->features & NETIF_F_RXHASH))
-                return -EOPNOTSUPP;
-
-        if (hfunc)
-                *hfunc = ETH_RSS_HASH_TOP;
-
-        if (indir)
-                rtl8126_get_reta(tp, indir);
-
-        if (key)
-                memcpy(key, tp->rss_key, RTL8126_RSS_KEY_SIZE);
-
-        return 0;
-}
-
 static u32 rtl8126_rss_key_reg(struct rtl8126_private *tp)
 {
         return RSS_KEY_8125;
@@ -386,6 +364,88 @@ static void rtl8126_store_rss_key(struct rtl8126_private *tp)
                 RTL_W32(tp, rss_key_reg + i, *rss_key++);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,8,0)
+int rtl8126_get_rxfh(struct net_device *dev, struct ethtool_rxfh_param *rxfh)
+{
+        struct rtl8126_private *tp = netdev_priv(dev);
+
+        netif_info(tp, drv, tp->dev, "rss get rxfh\n");
+
+        if (!(dev->features & NETIF_F_RXHASH))
+                return -EOPNOTSUPP;
+
+        rxfh->hfunc = ETH_RSS_HASH_TOP;
+
+        if (rxfh->indir)
+                rtl8126_get_reta(tp, rxfh->indir);
+
+        if (rxfh->key)
+                memcpy(rxfh->key, tp->rss_key, RTL8126_RSS_KEY_SIZE);
+
+        return 0;
+}
+
+int rtl8126_set_rxfh(struct net_device *dev, struct ethtool_rxfh_param *rxfh,
+                     struct netlink_ext_ack *extack)
+{
+        struct rtl8126_private *tp = netdev_priv(dev);
+        int i;
+        u32 reta_entries = rtl8126_rss_indir_tbl_entries(tp);
+
+        netif_info(tp, drv, tp->dev, "rss set rxfh\n");
+
+        /* We require at least one supported parameter to be changed and no
+         * change in any of the unsupported parameters
+         */
+        if (rxfh->hfunc != ETH_RSS_HASH_NO_CHANGE && rxfh->hfunc != ETH_RSS_HASH_TOP)
+                return -EOPNOTSUPP;
+
+        /* Fill out the redirection table */
+        if (rxfh->indir) {
+                int max_queues = tp->num_rx_rings;
+
+                /* Verify user input. */
+                for (i = 0; i < reta_entries; i++)
+                        if (rxfh->indir[i] >= max_queues)
+                                return -EINVAL;
+
+                for (i = 0; i < reta_entries; i++)
+                        tp->rss_indir_tbl[i] = rxfh->indir[i];
+        }
+
+        /* Fill out the rss hash key */
+        if (rxfh->key)
+                memcpy(tp->rss_key, rxfh->key, RTL8126_RSS_KEY_SIZE);
+
+        rtl8126_store_reta(tp);
+
+        rtl8126_store_rss_key(tp);
+
+        return 0;
+}
+#else
+int rtl8126_get_rxfh(struct net_device *dev, u32 *indir, u8 *key,
+                     u8 *hfunc)
+{
+        struct rtl8126_private *tp = netdev_priv(dev);
+
+        netif_info(tp, drv, tp->dev, "rss get rxfh\n");
+
+        if (!(dev->features & NETIF_F_RXHASH))
+                return -EOPNOTSUPP;
+
+        if (hfunc)
+                *hfunc = ETH_RSS_HASH_TOP;
+
+        if (indir)
+                rtl8126_get_reta(tp, indir);
+
+        if (key)
+                memcpy(key, tp->rss_key, RTL8126_RSS_KEY_SIZE);
+
+        return 0;
+}
+
 int rtl8126_set_rxfh(struct net_device *dev, const u32 *indir,
                      const u8 *key, const u8 hfunc)
 {
@@ -424,6 +484,7 @@ int rtl8126_set_rxfh(struct net_device *dev, const u32 *indir,
 
         return 0;
 }
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(6,8,0) */
 
 static u32 rtl8126_get_rx_desc_hash(struct rtl8126_private *tp,
                                     struct RxDescV3 *descv3)
