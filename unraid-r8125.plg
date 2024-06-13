@@ -67,7 +67,7 @@ if wget -q -nc --show-progress --progress=bar:force:noscroll -O "&packages;/${KE
     echo
     echo "---CHECKSUM ERROR!---"
     rm -rf &plugin; &emhttp;
-	if [ ! -f /boot/config/plugins/unraid-r8168.plg ] && [ ! -f /boot/config/plugins/unraid-r8126.plg ]; then
+	if [ ! -f /boot/config/plugins/unraid-r8168.plg ] &amp;&amp; [ ! -f /boot/config/plugins/unraid-r8126.plg ]; then
       remove_blacklist_r8169
     fi
     exit 1
@@ -78,7 +78,7 @@ else
   echo
   echo "-----------------------Can't download RTL8125 package-----------------------"
   rm -rf &plugin; &emhttp;
-  if [ ! -f /boot/config/plugins/unraid-r8168.plg ] && [ ! -f /boot/config/plugins/unraid-r8126.plg ]; then
+  if [ ! -f /boot/config/plugins/unraid-r8168.plg ] &amp;&amp; [ ! -f /boot/config/plugins/unraid-r8126.plg ]; then
     remove_blacklist_r8169
   fi
   exit 1
@@ -205,7 +205,7 @@ echo "--------------------------"
 echo "---Uninstalling RTL8125---"
 echo "--------------------------"
 # Remove plugin related files
-if [ ! -f /boot/config/plugins/unraid-r8168.plg ] && [ ! -f /boot/config/plugins/unraid-r8126.plg ]; then
+if [ ! -f /boot/config/plugins/unraid-r8168.plg ] &amp;&amp; [ ! -f /boot/config/plugins/unraid-r8126.plg ]; then
   if [ "$(grep -v "blacklist" /boot/config/modprobe.d/r8169.conf 2>/dev/null)" ]; then
     sed -i '/blacklist r8169/d' /boot/config/modprobe.d/r8169.conf 2>/dev/null
   else
