@@ -14,15 +14,16 @@ Signed-off-by: David Bauer <mail@david-bauer.net>
 
 --- a/r8152.c
 +++ b/r8152.c
-@@ -18,6 +18,7 @@
+@@ -18,7 +18,8 @@
  #include <linux/mii.h>
  #include <linux/ethtool.h>
+ #include <linux/phy.h>
  #include <linux/usb.h>
 +#include <linux/of.h>
  #include <linux/crc32.h>
  #include <linux/if_vlan.h>
  #include <linux/uaccess.h>
-@@ -12596,6 +12597,22 @@ out:
+@@ -12645,6 +12646,22 @@ out:
  	return ret;
  }
  
@@ -45,7 +46,7 @@ Signed-off-by: David Bauer <mail@david-bauer.net>
  static int r8152b_init(struct r8152 *tp)
  {
  	int ret;
- @@ -12696,6 +12713,7 @@ static int r8152b_init(struct r8152 *tp)
+ @@ -12745,6 +12762,7 @@ static int r8152b_init(struct r8152 *tp)
  				RX_AGG_DISABLE | RX_ZERO_EN);
  
  out:
@@ -53,7 +54,7 @@ Signed-off-by: David Bauer <mail@david-bauer.net>
  	return (ret < 0) ? ret : 0;
  }
  
- @@ -12884,6 +12902,7 @@ static int r8153_init(struct r8152 *tp)
+ @@ -12933,6 +12951,7 @@ static int r8153_init(struct r8152 *tp)
  	}
  
  out:
@@ -61,7 +62,7 @@ Signed-off-by: David Bauer <mail@david-bauer.net>
  	return (ret < 0) ? ret : 0;
  }
  
- @@ -13014,6 +13033,7 @@ static int r8153b_init(struct r8152 *tp)
+ @@ -13063,6 +13082,7 @@ static int r8153b_init(struct r8152 *tp)
  	tp->coalesce = 15000;	/* 15 us */
  
  out:
