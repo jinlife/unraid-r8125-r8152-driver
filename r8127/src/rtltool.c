@@ -41,17 +41,21 @@
 #include <linux/ethtool.h>
 #include <asm/uaccess.h>
 #include "r8127.h"
+#include "r8127_fiber.h"
 #include "rtl_eeprom.h"
 #include "rtltool.h"
 
 int rtl8127_tool_ioctl(struct rtl8127_private *tp, struct ifreq *ifr)
 {
+        struct rtltool_sds_cmd *sds_cmd;
         struct rtltool_cmd my_cmd;
+        unsigned long flags;
         int ret;
 
         if (copy_from_user(&my_cmd, ifr->ifr_data, sizeof(my_cmd)))
                 return -EFAULT;
 
+        sds_cmd = (struct rtltool_sds_cmd*)&my_cmd;
         ret = 0;
         switch (my_cmd.cmd) {
         case RTLTOOL_READ_MAC:
@@ -97,7 +101,9 @@ int rtl8127_tool_ioctl(struct rtl8127_private *tp, struct ifreq *ifr)
                 break;
 
         case RTLTOOL_READ_PHY:
+                r8127_spin_lock(&tp->phy_lock, flags);
                 my_cmd.data = rtl8127_mdio_prot_read(tp, my_cmd.offset);
+                r8127_spin_unlock(&tp->phy_lock, flags);
                 if (copy_to_user(ifr->ifr_data, &my_cmd, sizeof(my_cmd))) {
                         ret = -EFAULT;
                         break;
@@ -106,7 +112,9 @@ int rtl8127_tool_ioctl(struct rtl8127_private *tp, struct ifreq *ifr)
                 break;
 
         case RTLTOOL_WRITE_PHY:
+                r8127_spin_lock(&tp->phy_lock, flags);
                 rtl8127_mdio_prot_write(tp, my_cmd.offset, my_cmd.data);
+                r8127_spin_unlock(&tp->phy_lock, flags);
                 break;
 
         case RTLTOOL_READ_EPHY:
@@ -219,13 +227,17 @@ int rtl8127_tool_ioctl(struct rtl8127_private *tp, struct ifreq *ifr)
                 break;
 
         case RTL_ENABLE_PCI_DIAG:
+                r8127_spin_lock(&tp->phy_lock, flags);
                 tp->rtk_enable_diag = 1;
+                r8127_spin_unlock(&tp->phy_lock, flags);
 
                 dprintk("enable rtk diag\n");
                 break;
 
         case RTL_DISABLE_PCI_DIAG:
+                r8127_spin_lock(&tp->phy_lock, flags);
                 tp->rtk_enable_diag = 0;
+                r8127_spin_unlock(&tp->phy_lock, flags);
 
                 dprintk("disable rtk diag\n");
                 break;
@@ -249,7 +261,9 @@ int rtl8127_tool_ioctl(struct rtl8127_private *tp, struct ifreq *ifr)
                 break;
 
         case RTL_DIRECT_READ_PHY_OCP:
+                r8127_spin_lock(&tp->phy_lock, flags);
                 my_cmd.data = rtl8127_mdio_prot_direct_read_phy_ocp(tp, my_cmd.offset);
+                r8127_spin_unlock(&tp->phy_lock, flags);
                 if (copy_to_user(ifr->ifr_data, &my_cmd, sizeof(my_cmd))) {
                         ret = -EFAULT;
                         break;
@@ -258,7 +272,38 @@ int rtl8127_tool_ioctl(struct rtl8127_private *tp, struct ifreq *ifr)
                 break;
 
         case RTL_DIRECT_WRITE_PHY_OCP:
+                r8127_spin_lock(&tp->phy_lock, flags);
                 rtl8127_mdio_prot_direct_write_phy_ocp(tp, my_cmd.offset, my_cmd.data);
+                r8127_spin_unlock(&tp->phy_lock, flags);
+                break;
+
+        case RTL_READ_SDS_PHY:
+                if (!HW_FIBER_MODE_ENABLED(tp)) {
+                        ret = -EOPNOTSUPP;
+                        break;
+                }
+
+                r8127_spin_lock(&tp->phy_lock, flags);
+                sds_cmd->data = rtl8127_sds_phy_read_8127(tp, sds_cmd->index,
+                                sds_cmd->page, sds_cmd->addr);
+                r8127_spin_unlock(&tp->phy_lock, flags);
+                if (copy_to_user(ifr->ifr_data, &my_cmd, sizeof(my_cmd))) {
+                        ret = -EFAULT;
+                        break;
+                }
+
+                break;
+
+        case RTL_WRITE_SDS_PHY:
+                if (!HW_FIBER_MODE_ENABLED(tp)) {
+                        ret = -EOPNOTSUPP;
+                        break;
+                }
+
+                r8127_spin_lock(&tp->phy_lock, flags);
+                rtl8127_sds_phy_write_8127(tp, sds_cmd->index, sds_cmd->page,
+                                           sds_cmd->addr, sds_cmd->data);
+                r8127_spin_unlock(&tp->phy_lock, flags);
                 break;
 
         default:

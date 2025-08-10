@@ -41,6 +41,7 @@
 #include <linux/version.h>
 #include "r8127_dash.h"
 #include "r8127_realwow.h"
+#include "r8127_fiber.h"
 #ifdef ENABLE_PTP_SUPPORT
 #include "r8127_ptp.h"
 #endif
@@ -592,18 +593,17 @@ static inline u32 rtl8127_ethtool_adv_to_mmd_eee_adv_cap2_t(u32 adv)
 #else
 #define NAPI_SUFFIX ""
 #endif
-#if defined(ENABLE_DASH_PRINTER_SUPPORT)
-#define DASH_SUFFIX "-PRINTER"
-#elif defined(ENABLE_DASH_SUPPORT)
-#define DASH_SUFFIX "-DASH"
-#else
-#define DASH_SUFFIX ""
-#endif
 
 #if defined(ENABLE_REALWOW_SUPPORT)
 #define REALWOW_SUFFIX "-REALWOW"
 #else
 #define REALWOW_SUFFIX ""
+#endif
+
+#if defined(ENABLE_DASH_SUPPORT)
+#define DASH_SUFFIX "-DASH"
+#else
+#define DASH_SUFFIX ""
 #endif
 
 #if defined(ENABLE_PTP_SUPPORT)
@@ -618,7 +618,7 @@ static inline u32 rtl8127_ethtool_adv_to_mmd_eee_adv_cap2_t(u32 adv)
 #define RSS_SUFFIX ""
 #endif
 
-#define RTL8127_VERSION "11.014.00" NAPI_SUFFIX DASH_SUFFIX REALWOW_SUFFIX PTP_SUFFIX RSS_SUFFIX
+#define RTL8127_VERSION "11.015.00" NAPI_SUFFIX DASH_SUFFIX REALWOW_SUFFIX PTP_SUFFIX RSS_SUFFIX
 #define MODULENAME "r8127"
 #define PFX MODULENAME ": "
 
@@ -648,6 +648,14 @@ This is free software, and you are welcome to redistribute it under certain cond
 #else
 #define rtl8127_rx_hwaccel_skb      vlan_hwaccel_rx
 #define rtl8127_rx_quota(count, quota)  count
+#endif
+
+#ifdef CONFIG_R8127_NAPI
+#define r8127_spin_lock(lock, flags)  (void)flags;spin_lock_bh(lock)
+#define r8127_spin_unlock(lock, flags)  (void)flags;spin_unlock_bh(lock)
+#else
+#define r8127_spin_lock(lock, flags)  spin_lock_irqsave(lock, flags)
+#define r8127_spin_unlock(lock, flags)  spin_unlock_irqrestore(lock, flags)
 #endif
 
 /* MAC address length */
@@ -708,18 +716,22 @@ This is free software, and you are welcome to redistribute it under certain cond
 
 #define R8127_MAX_MSIX_VEC_8125A   4
 #define R8127_MAX_MSIX_VEC_8125B   32
+#define R8127_MAX_MSIX_VEC_8127    32
+#define R8127_MAX_MSIX_VEC_8127AP  64
 #define R8127_MAX_MSIX_VEC_8125D   32
 #define R8127_MIN_MSIX_VEC_8125B   22
 #define R8127_MIN_MSIX_VEC_8125BP  31
 #define R8127_MIN_MSIX_VEC_8125D   20
 #define R8127_MIN_MSIX_VEC_8127    30
-#define R8127_MAX_MSIX_VEC   32
+#define R8127_MIN_MSIX_VEC_8127AP  49
+#define R8127_MAX_MSIX_VEC   64
 #define R8127_MAX_RX_QUEUES_VEC_V3 (16)
 #define R8127_MAX_RX_QUEUES_VEC_V4 (8)
 
 #define RTL8127_TX_TIMEOUT  (6 * HZ)
 #define RTL8127_LINK_TIMEOUT    (1 * HZ)
 #define RTL8127_ESD_TIMEOUT (2 * HZ)
+#define RTL8127_DASH_TIMEOUT    (0)
 
 #define rtl8127_rx_page_size(order) (PAGE_SIZE << order)
 
@@ -1602,6 +1614,11 @@ enum RTL8127_registers {
         TCAM_VALID_ADDR_V2              = 0xB000,
         TCAM_MAC_ADDR_V2                = 0x00,
         TCAM_VLAN_TAG_V2                = 0x03,
+
+        RADMFIFO_PROTECT    = 0x0402,
+
+        RISC_IMR_8127AP     = 0x0D20,
+        RISC_ISR_8127AP     = 0x0D24,
 };
 
 enum RTL8127_register_content {
@@ -1874,9 +1891,26 @@ enum RTL8127_register_content {
         ISRIMR_V6_TOK_Q0     = (1 << 8),
         ISRIMR_V6_TOK_Q1     = (1 << 9),
         ISRIMR_V6_LINKCHG    = (1 << 29),
+        ISRIMR_V6_LAYER2_INTR_STS = (1 << 31),
+        /* MISC interrupt */
+        ISRIMR_V6_L2_MISC_INTR    = (1 << 16),
+        ISRIMR_V6_L3_MISC_IPC2    = (1 << 2),
+
+        /* IPC2 */
+        RISC_IPC2_INTR    = (1 << 1),
 
         /* Magic Number */
         RTL8127_MAGIC_NUMBER = 0x0badbadbadbadbadull,
+};
+
+enum RTL8127_msix_id {
+        MSIX_ID_V2_LINKCHG = 21,
+
+        MSIX_ID_V4_LINKCHG = 29,
+
+        MSIX_ID_V5_LINKCHG = 18,
+
+        MSIX_ID_V6_L2_MISC_INTR = 48,
 };
 
 enum _DescStatusBit {
@@ -2185,11 +2219,21 @@ struct pci_resource {
         u32 pci_sn_h;
 };
 
+enum r8127_dash_req_flag {
+        R8127_RCV_REQ_SYS_OK = 0,
+        R8127_RCV_REQ_DASH_OK,
+        R8127_SEND_REQ_HOST_OK,
+        R8127_CMAC_RESET,
+        R8127_CMAC_DISALE_RX_FLAG_MAX,
+        R8127_DASH_REQ_FLAG_MAX
+};
+
 enum r8127_flag {
         R8127_FLAG_DOWN = 0,
         R8127_FLAG_TASK_RESET_PENDING,
         R8127_FLAG_TASK_ESD_CHECK_PENDING,
         R8127_FLAG_TASK_LINKCHG_CHECK_PENDING,
+        R8127_FLAG_TASK_DASH_CHECK_PENDING,
         R8127_FLAG_MAX
 };
 
@@ -2560,6 +2604,7 @@ struct rtl8127_private {
         u16 rms;
         u16 cp_cmd;
         u32 intr_mask;
+        u32 intr_l2_mask;
         u32 timer_intr_mask;
         u16 isr_reg[R8127_MAX_MSIX_VEC];
         u16 imr_reg[R8127_MAX_MSIX_VEC];
@@ -2600,10 +2645,12 @@ struct rtl8127_private {
         struct work_struct reset_task;
         struct work_struct esd_task;
         struct work_struct linkchg_task;
+        struct work_struct dash_task;
 #else
         struct delayed_work reset_task;
         struct delayed_work esd_task;
         struct delayed_work linkchg_task;
+        struct delayed_work dash_task;
 #endif
         DECLARE_BITMAP(task_flags, R8127_FLAG_MAX);
         unsigned features;
@@ -2691,21 +2738,21 @@ struct rtl8127_private {
         //Dash+++++++++++++++++
         u8 HwSuppDashVer;
         u8 DASH;
-        u8 dash_printer_enabled;
         u8 HwPkgDet;
+        u8 HwSuppOcpChannelVer;
+        u32 DashFirmwareVersion;
+        u32 SizeOfSendToFwBuffer;
+        u32 SizeOfRecvFromFwBuffer;
         u8 AllowAccessDashOcp;
-        void __iomem *mapped_cmac_ioaddr; /* mapped cmac memory map physical address */
-        void __iomem *cmac_ioaddr; /* cmac memory map physical address */
+        DECLARE_BITMAP(dash_req_flags, R8127_DASH_REQ_FLAG_MAX);
 
 #ifdef ENABLE_DASH_SUPPORT
         u16 AfterRecvFromFwBufLen;
         u8 AfterRecvFromFwBuf[RECV_FROM_FW_BUF_SIZE];
+        u32 RecvFromFwBufErrCnt;
         u16 AfterSendToFwBufLen;
         u8 AfterSendToFwBuf[SEND_TO_FW_BUF_SIZE];
         u16 SendToFwBufferLen;
-        u32 SizeOfSendToFwBuffer;
-        u32 SizeOfSendToFwBufferMemAlloc;
-        u32 NumOfSendToFwBuffer;
 
         u8 OobReq;
         u8 OobAck;
@@ -2718,51 +2765,13 @@ struct rtl8127_private {
 
         u8 DashFwDisableRx;
 
-        void *UnalignedSendToFwBufferVa;
-        void *SendToFwBuffer;
-        u64 SendToFwBufferPhy;
         u8 SendingToFw;
-        dma_addr_t UnalignedSendToFwBufferPa;
-        PTX_DASH_SEND_FW_DESC TxDashSendFwDesc;
-        u64 TxDashSendFwDescPhy;
-        u8 *UnalignedTxDashSendFwDescVa;
-        u32 SizeOfTxDashSendFwDescMemAlloc;
-        u32 SizeOfTxDashSendFwDesc;
-        u32 NumTxDashSendFwDesc;
-        u32 CurrNumTxDashSendFwDesc;
-        u32 LastSendNumTxDashSendFwDesc;
-        dma_addr_t UnalignedTxDashSendFwDescPa;
 
-        u32 NumRecvFromFwBuffer;
-        u32 SizeOfRecvFromFwBuffer;
-        u32 SizeOfRecvFromFwBufferMemAlloc;
-        void *RecvFromFwBuffer;
-        u64 RecvFromFwBufferPhy;
+        u32 RecvFromDashFwCnt;
 
-        void *UnalignedRecvFromFwBufferVa;
-        dma_addr_t UnalignedRecvFromFwBufferPa;
-        PRX_DASH_FROM_FW_DESC RxDashRecvFwDesc;
-        u64 RxDashRecvFwDescPhy;
-        u8 *UnalignedRxDashRecvFwDescVa;
-        u32 SizeOfRxDashRecvFwDescMemAlloc;
-        u32 SizeOfRxDashRecvFwDesc;
-        u32 NumRxDashRecvFwDesc;
-        u32 CurrNumRxDashRecvFwDesc;
-        dma_addr_t UnalignedRxDashRecvFwDescPa;
         u8 DashReqRegValue;
         u16 HostReqValue;
 
-        u32 CmacResetIsrCounter;
-        u8 CmacResetIntr;
-        u8 CmacResetting;
-        u8 CmacOobIssueCmacReset;
-        u32 CmacResetbyFwCnt;
-
-#if defined(ENABLE_DASH_PRINTER_SUPPORT)
-        struct completion fw_ack;
-        struct completion fw_req;
-        struct completion fw_host_ok;
-#endif
         //Dash-----------------
 #endif //ENABLE_DASH_SUPPORT
 
@@ -2934,7 +2943,7 @@ enum mcfg {
 
 //Ram Code Version
 #define NIC_RAMCODE_VERSION_CFG_METHOD_1 (0x0015)
-#define NIC_RAMCODE_VERSION_CFG_METHOD_2 (0x0015)
+#define NIC_RAMCODE_VERSION_CFG_METHOD_2 (0x0036)
 
 //hwoptimize
 #define HW_PATCH_SOC_LAN (BIT_0)
@@ -2954,7 +2963,6 @@ u16 rtl8127_mac_ocp_read(struct rtl8127_private *tp, u16 reg_addr);
 void rtl8127_clear_eth_phy_bit(struct rtl8127_private *tp, u8 addr, u16 mask);
 void rtl8127_set_eth_phy_bit(struct rtl8127_private *tp,  u8  addr, u16  mask);
 void rtl8127_ocp_write(struct rtl8127_private *tp, u16 addr, u8 len, u32 data);
-void rtl8127_oob_notify(struct rtl8127_private *tp, u8 cmd);
 void rtl8127_init_ring_indexes(struct rtl8127_private *tp);
 void rtl8127_oob_mutex_lock(struct rtl8127_private *tp);
 u32 rtl8127_ocp_read(struct rtl8127_private *tp, u16 addr, u8 len);
@@ -3007,13 +3015,58 @@ static inline void
 rtl8127_disable_hw_interrupt_v2(struct rtl8127_private *tp,
                                 u32 message_id)
 {
-        RTL_W32(tp, IMR_V2_CLEAR_REG_8125, BIT(message_id));
+        if (message_id < 32)
+                RTL_W32(tp, IMR_V2_CLEAR_REG_8125, BIT(message_id));
+        else
+                return;
 }
 
 static inline void
 rtl8127_enable_hw_interrupt_v2(struct rtl8127_private *tp, u32 message_id)
 {
-        RTL_W32(tp, IMR_V2_SET_REG_8125, BIT(message_id));
+        if (message_id < 32)
+                RTL_W32(tp, IMR_V2_SET_REG_8125, BIT(message_id));
+        else
+                return;
+}
+
+static inline void
+rtl8127_disable_hw_l2_interrupt_v4(struct rtl8127_private *tp,
+                                   u32 message_id)
+{
+        if (message_id < 32)
+                return;
+        else
+                RTL_W32(tp, IMR_V4_L2_CLEAR_REG_8125, BIT(message_id - 32));
+}
+
+static inline void
+rtl8127_enable_hw_l2_interrupt_v4(struct rtl8127_private *tp, u32 message_id)
+{
+        if (message_id < 32)
+                return;
+        else
+                RTL_W32(tp, IMR_V4_L2_SET_REG_8125, BIT(message_id - 32));
+}
+
+static inline void
+rtl8127_disable_hw_layered_interrupt(struct rtl8127_private *tp,
+                                     u32 message_id)
+{
+        if (message_id < 32)
+                rtl8127_disable_hw_interrupt_v2(tp, message_id);
+        else
+                rtl8127_disable_hw_l2_interrupt_v4(tp, message_id);
+}
+
+static inline void
+rtl8127_enable_hw_layered_interrupt(struct rtl8127_private *tp,
+                                    u32 message_id)
+{
+        if (message_id < 32)
+                rtl8127_enable_hw_interrupt_v2(tp, message_id);
+        else
+                rtl8127_enable_hw_l2_interrupt_v4(tp, message_id);
 }
 
 int rtl8127_open(struct net_device *dev);

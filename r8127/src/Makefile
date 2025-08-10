@@ -33,7 +33,6 @@
 CONFIG_SOC_LAN = y
 ENABLE_REALWOW_SUPPORT = n
 ENABLE_DASH_SUPPORT = n
-ENABLE_DASH_PRINTER_SUPPORT = n
 CONFIG_DOWN_SPEED_100 = n
 CONFIG_ASPM = n
 ENABLE_S5WOL = y
@@ -55,7 +54,7 @@ ENABLE_GIGA_LITE = y
 
 ifneq ($(KERNELRELEASE),)
 	obj-m := r8127.o
-	r8127-objs := r8127_n.o rtl_eeprom.o rtltool.o
+	r8127-objs := r8127_n.o rtl_eeprom.o rtltool.o r8127_fiber.o
 	ifeq ($(CONFIG_SOC_LAN), y)
 		EXTRA_CFLAGS += -DCONFIG_SOC_LAN
 	endif
@@ -66,10 +65,6 @@ ifneq ($(KERNELRELEASE),)
 	ifeq ($(ENABLE_DASH_SUPPORT), y)
 		r8127-objs += r8127_dash.o
 		EXTRA_CFLAGS += -DENABLE_DASH_SUPPORT
-	endif
-	ifeq ($(ENABLE_DASH_PRINTER_SUPPORT), y)
-		r8127-objs += r8127_dash.o
-		EXTRA_CFLAGS += -DENABLE_DASH_SUPPORT -DENABLE_DASH_PRINTER_SUPPORT
 	endif
 	EXTRA_CFLAGS += -DCONFIG_R8127_NAPI
 	EXTRA_CFLAGS += -DCONFIG_R8127_VLAN
@@ -131,6 +126,9 @@ ifneq ($(KERNELRELEASE),)
 	ifeq ($(ENABLE_GIGA_LITE), y)
 		EXTRA_CFLAGS += -DENABLE_GIGA_LITE
 	endif
+
+	# Backward compatibility
+	ccflags-y  += $(EXTRA_CFLAGS)
 else
 	BASEDIR := /lib/modules/$(shell uname -r)
 	KERNELDIR ?= $(BASEDIR)/build
