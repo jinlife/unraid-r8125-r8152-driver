@@ -5,7 +5,7 @@
 # r8168 is the Linux device driver released for Realtek Gigabit Ethernet
 # controllers with PCI-Express interface.
 #
-# Copyright(c) 2024 Realtek Semiconductor Corp. All rights reserved.
+# Copyright(c) 2025 Realtek Semiconductor Corp. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the Free
@@ -625,6 +625,9 @@ static int rtl8168_set_speed(struct net_device *dev, u8 autoneg, u32 speed, u8 d
 
 static int rtl8168_set_phy_mcu_patch_request(struct rtl8168_private *tp);
 static int rtl8168_clear_phy_mcu_patch_request(struct rtl8168_private *tp);
+
+static u32 rtl8168_pci_config_read(struct rtl8168_private *tp, u32 addr);
+static void rtl8168_pci_config_write(struct rtl8168_private *tp, u32 addr, u32 value);
 
 #ifdef CONFIG_R8168_NAPI
 static int rtl8168_poll(napi_ptr napi, napi_budget budget);
@@ -1516,16 +1519,16 @@ static int proc_get_pci_registers(struct seq_file *m, void *v)
                 seq_printf(m, "\n0x%03x:\t", n);
 
                 for (i = 0; i < 4 && n < max; i++, n+=4) {
-                        pci_read_config_dword(tp->pci_dev, n, &dword_rd);
+                        dword_rd = rtl8168_pci_config_read(tp, n);
                         seq_printf(m, "%08x ", dword_rd);
                 }
         }
 
         n = 0x110;
-        pci_read_config_dword(tp->pci_dev, n, &dword_rd);
+        dword_rd = rtl8168_pci_config_read(tp, n);
         seq_printf(m, "\n0x%03x:\t%08x ", n, dword_rd);
         n = 0x70c;
-        pci_read_config_dword(tp->pci_dev, n, &dword_rd);
+        dword_rd = rtl8168_pci_config_read(tp, n);
         seq_printf(m, "\n0x%03x:\t%08x ", n, dword_rd);
 
         rtnl_unlock();
@@ -1784,6 +1787,50 @@ static int proc_dump_msix_tbl(struct seq_file *m, void *v)
         rtnl_unlock();
 
         iounmap(ioaddr);
+
+        seq_putc(m, '\n');
+        return 0;
+}
+
+static int proc_dump_mac_mcu_bp(struct seq_file *m, void *v)
+{
+        int i, j;
+        struct net_device *dev = m->private;
+        struct rtl8168_private *tp = netdev_priv(dev);
+
+        switch (tp->mcfg) {
+        case CFG_METHOD_1 ... CFG_METHOD_20:
+                return -EOPNOTSUPP;
+        default:
+                break;
+        }
+
+        rtnl_lock();
+
+        seq_printf(m, "\ndump MAC MCU BPs. \n");
+
+        switch (tp->mcfg) {
+        case CFG_METHOD_29:
+        case CFG_METHOD_30:
+        case CFG_METHOD_31:
+        case CFG_METHOD_32:
+        case CFG_METHOD_33:
+        case CFG_METHOD_34:
+        case CFG_METHOD_35:
+        case CFG_METHOD_36:
+        case CFG_METHOD_37:
+                seq_printf(m, "BP_EN 0x%04x \n", rtl8168_mac_ocp_read(tp, 0xFC38));
+                break;
+        }
+
+        seq_printf(m, "BP Base 0x%04x \n", rtl8168_mac_ocp_read(tp, 0xFC26));
+
+        for (i=0xFC28, j=0; i<0xFC38; i+=2, j++) {
+                seq_printf(m, "BP%02d(0x%04x) 0x%04x \n", j, i,
+                           rtl8168_mac_ocp_read(tp, i));
+        }
+
+        rtnl_unlock();
 
         seq_putc(m, '\n');
         return 0;
@@ -2293,7 +2340,7 @@ static int proc_get_pci_registers(char *page, char **start,
                                 n);
 
                 for (i = 0; i < 4 && n < max; i++, n+=4) {
-                        pci_read_config_dword(tp->pci_dev, n, &dword_rd);
+                        dword_rd = rtl8168_pci_config_read(tp, n);
                         len += snprintf(page + len, count - len,
                                         "%08x ",
                                         dword_rd);
@@ -2301,13 +2348,13 @@ static int proc_get_pci_registers(char *page, char **start,
         }
 
         n = 0x110;
-        pci_read_config_dword(tp->pci_dev, n, &dword_rd);
+        dword_rd = rtl8168_pci_config_read(tp, n);
         len += snprintf(page + len, count - len,
                         "\n0x%03x:\t%08x ",
                         n,
                         dword_rd);
         n = 0x70c;
-        pci_read_config_dword(tp->pci_dev, n, &dword_rd);
+        dword_rd = rtl8168_pci_config_read(tp, n);
         len += snprintf(page + len, count - len,
                         "\n0x%03x:\t%08x ",
                         n,
@@ -2634,6 +2681,59 @@ static int proc_dump_msix_tbl(char *page, char **start,
         *eof = 1;
         return 0;
 }
+
+static int proc_dump_mac_mcu_bp(char *page, char **start,
+                                off_t offset, int count,
+                                int *eof, void *data)
+{
+        int i, j;
+        int len = 0;
+        struct net_device *dev = data;
+        struct rtl8168_private *tp = netdev_priv(dev);
+
+        switch (tp->mcfg) {
+        case CFG_METHOD_1 ... CFG_METHOD_20:
+                return -EOPNOTSUPP;
+        default:
+                break;
+        }
+
+        rtnl_lock();
+
+        len += snprintf(page + len, count - len,
+                        "\ndump MAC MCU BPs. \n");
+
+        switch (tp->mcfg) {
+        case CFG_METHOD_29:
+        case CFG_METHOD_30:
+        case CFG_METHOD_31:
+        case CFG_METHOD_32:
+        case CFG_METHOD_33:
+        case CFG_METHOD_34:
+        case CFG_METHOD_35:
+        case CFG_METHOD_36:
+        case CFG_METHOD_37:
+                len += snprintf(page + len, count - len, "BP_EN 0x%04x \n",
+                                rtl8168_mac_ocp_read(tp, 0xFC38));
+                break;
+        }
+
+        len += snprintf(page + len, count - len, "BP Base 0x%04x \n",
+                        rtl8168_mac_ocp_read(tp, 0xFC26));
+
+        for (i=0xFC28, j=0; i<0xFC38; i+=2, j++) {
+                len += snprintf(page + len, count - len,
+                                "BP%02d(0x%04x) 0x%04x \n", j, i,
+                                rtl8168_mac_ocp_read(tp, i));
+        }
+
+        rtnl_unlock();
+
+        len += snprintf(page + len, count - len, "\n");
+
+        *eof = 1;
+        return 0;
+}
 #endif //LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
 
 static void rtl8168_proc_module_init(void)
@@ -2706,6 +2806,7 @@ static const struct rtl8168_proc_file rtl8168_debug_proc_files[] = {
         { "rx_desc", &proc_dump_rx_desc },
         { "rx_desc_2", &proc_dump_rx_desc_2 },
         { "msix_tbl", &proc_dump_msix_tbl },
+        { "mac_mcu_bp", &proc_dump_mac_mcu_bp },
         { "" }
 };
 
@@ -2878,9 +2979,11 @@ static ssize_t testmode_show(struct device *dev,
         struct net_device *netdev = to_net_dev(dev);
         struct rtl8168_private *tp = netdev_priv(netdev);
 
-        sprintf(buf, "%u\n", tp->testmode);
-
-        return strlen(buf);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,4,103)
+        return sprintf(buf, "%u\n", tp->testmode);
+#else
+        return sysfs_emit(buf, "%u\n", tp->testmode);
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5,4,103) */
 }
 
 static ssize_t testmode_store(struct device *dev,
@@ -4271,6 +4374,34 @@ int rtl8168_eri_write_with_oob_base_address(struct rtl8168_private *tp, int addr
 int rtl8168_eri_write(struct rtl8168_private *tp, int addr, int len, u32 value, int type)
 {
         return rtl8168_eri_write_with_oob_base_address(tp, addr, len, value, type, NO_BASE_ADDRESS);
+}
+
+static u32
+rtl8168_pci_config_read(struct rtl8168_private *tp,
+                        u32 addr)
+{
+        struct pci_dev *pdev = tp->pci_dev;
+        u32 val;
+
+        if (pdev->cfg_size > (addr + 3) &&
+            pci_read_config_dword(pdev, addr, &val) == PCIBIOS_SUCCESSFUL)
+                return val;
+        else
+                return rtl8168_csi_read(tp, addr);
+}
+
+static void
+rtl8168_pci_config_write(struct rtl8168_private *tp,
+                         u32 addr,
+                         u32 value)
+{
+        struct pci_dev *pdev = tp->pci_dev;
+
+        if (pdev->cfg_size > (addr + 3) &&
+            pci_write_config_dword(pdev, addr, value) == PCIBIOS_SUCCESSFUL)
+                return;
+        else
+                rtl8168_csi_write(tp, addr, value);
 }
 
 static void
@@ -5918,7 +6049,9 @@ rtl8168_set_pci_99_exit_driver_para(struct net_device *dev)
         case CFG_METHOD_37:
                 if (tp->org_pci_offset_99 & BIT_2)
                         rtl8168_issue_offset_99_event(tp);
-                rtl8168_disable_pci_offset_99(tp);
+
+                if (test_bit(R8168_FLAG_SUSPEND | R8168_FLAG_SHUTDOWN, tp->task_flags))
+                        rtl8168_disable_pci_offset_99(tp);
                 break;
         }
 }
@@ -6987,11 +7120,16 @@ static void rtl8168_gset_xmii(struct net_device *dev,
                              )
 {
         struct rtl8168_private *tp = netdev_priv(dev);
-        u8 status;
+        u16 aner = tp->phy_reg_aner;
+        u16 anlpar = tp->phy_reg_anlpar;
+        u16 gbsr = tp->phy_reg_gbsr;
+        u64 lpa_adv = 0;
+        u32 status;
         u8 autoneg, duplex;
         u32 speed = 0;
-        u16 bmcr, bmsr, anlpar, ctrl1000 = 0, stat1000 = 0;
-        u32 supported, advertising, lp_advertising;
+        u16 bmcr;
+        u64 supported, advertising;
+        u8 report_lpa = 0;
 
         supported = SUPPORTED_10baseT_Half |
                     SUPPORTED_10baseT_Full |
@@ -7003,27 +7141,9 @@ static void rtl8168_gset_xmii(struct net_device *dev,
                     SUPPORTED_Pause |
                     SUPPORTED_Asym_Pause;
 
-        advertising = ADVERTISED_TP;
-
-        rtl8168_mdio_write(tp, 0x1F, 0x0000);
-        bmcr = rtl8168_mdio_read(tp, MII_BMCR);
-        bmsr = rtl8168_mdio_read(tp, MII_BMSR);
-        anlpar = rtl8168_mdio_read(tp, MII_LPA);
-        ctrl1000 = rtl8168_mdio_read(tp, MII_CTRL1000);
-        stat1000 = rtl8168_mdio_read(tp, MII_STAT1000);
-
-        if (bmcr & BMCR_ANENABLE) {
-                advertising |= ADVERTISED_Autoneg;
-                autoneg = AUTONEG_ENABLE;
-
-                if (bmsr & BMSR_ANEGCOMPLETE) {
-                        lp_advertising = mii_lpa_to_ethtool_lpa_t(anlpar);
-                        lp_advertising |=
-                                mii_stat1000_to_ethtool_lpa_t(stat1000);
-                } else {
-                        lp_advertising = 0;
-                }
-
+        advertising = tp->advertising;
+        if (tp->phy_auto_nego_reg || tp->phy_1000_ctrl_reg) {
+                advertising = 0;
                 if (tp->phy_auto_nego_reg & ADVERTISE_10HALF)
                         advertising |= ADVERTISED_10baseT_Half;
                 if (tp->phy_auto_nego_reg & ADVERTISE_10FULL)
@@ -7034,21 +7154,26 @@ static void rtl8168_gset_xmii(struct net_device *dev,
                         advertising |= ADVERTISED_100baseT_Full;
                 if (tp->phy_1000_ctrl_reg & ADVERTISE_1000FULL)
                         advertising |= ADVERTISED_1000baseT_Full;
-        } else {
-                autoneg = AUTONEG_DISABLE;
-                lp_advertising = 0;
         }
 
-        status = RTL_R8(tp, PHYstatus);
+        rtl8168_mdio_write(tp, 0x1F, 0x0000);
+        bmcr = rtl8168_mdio_read(tp, MII_BMCR);
+        if (bmcr & BMCR_ANENABLE) {
+                autoneg = AUTONEG_ENABLE;
+                advertising |= ADVERTISED_Autoneg;
+        } else {
+                autoneg = AUTONEG_DISABLE;
+        }
 
-        if (status & LinkStatus) {
+        advertising |= ADVERTISED_TP;
+
+        status = RTL_R8(tp, PHYstatus);
+        if (netif_running(dev) && (status & LinkStatus))
+                report_lpa = 1;
+
+        if (report_lpa) {
                 /*link on*/
-                if (status & _1000bpsF)
-                        speed = SPEED_1000;
-                else if (status & _100bps)
-                        speed = SPEED_100;
-                else if (status & _10bps)
-                        speed = SPEED_10;
+                speed = rtl8168_convert_link_speed(status);
 
                 if (status & TxFlowCtrl)
                         advertising |= ADVERTISED_Asym_Pause;
@@ -7056,24 +7181,43 @@ static void rtl8168_gset_xmii(struct net_device *dev,
                 if (status & RxFlowCtrl)
                         advertising |= ADVERTISED_Pause;
 
-                duplex = ((status & _1000bpsF) || (status & FullDup)) ?
+                duplex = ((status & (_1000bpsF)) || (status & FullDup)) ?
                          DUPLEX_FULL : DUPLEX_HALF;
+
+                /*link partner*/
+                if (aner & EXPANSION_NWAY)
+                        lpa_adv |= ADVERTISED_Autoneg;
+                if (anlpar & LPA_10HALF)
+                        lpa_adv |= ADVERTISED_10baseT_Half;
+                if (anlpar & LPA_10FULL)
+                        lpa_adv |= ADVERTISED_10baseT_Full;
+                if (anlpar & LPA_100HALF)
+                        lpa_adv |= ADVERTISED_100baseT_Half;
+                if (anlpar & LPA_100FULL)
+                        lpa_adv |= ADVERTISED_100baseT_Full;
+                if (anlpar & LPA_PAUSE_CAP)
+                        lpa_adv |= ADVERTISED_Pause;
+                if (anlpar & LPA_PAUSE_ASYM)
+                        lpa_adv |= ADVERTISED_Asym_Pause;
+                if (gbsr & LPA_1000HALF)
+                        lpa_adv |= ADVERTISED_1000baseT_Half;
+                if (gbsr & LPA_1000FULL)
+                        lpa_adv |= ADVERTISED_1000baseT_Full;
         } else {
                 /*link down*/
                 speed = SPEED_UNKNOWN;
                 duplex = DUPLEX_UNKNOWN;
+                lpa_adv = 0;
         }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
-        cmd->supported = supported;
-        cmd->advertising = advertising;
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,30)
-        cmd->lp_advertising = lp_advertising;
-#endif
+        cmd->supported = (u32)supported;
+        cmd->advertising = (u32)advertising;
         cmd->autoneg = autoneg;
         cmd->speed = speed;
         cmd->duplex = duplex;
         cmd->port = PORT_TP;
+        cmd->lp_advertising = (u32)lpa_adv;
         cmd->eth_tp_mdix = rtl8168_get_mdi_status(tp);
 #else
         ethtool_convert_legacy_u32_to_link_mode(cmd->link_modes.supported,
@@ -7081,7 +7225,8 @@ static void rtl8168_gset_xmii(struct net_device *dev,
         ethtool_convert_legacy_u32_to_link_mode(cmd->link_modes.advertising,
                                                 advertising);
         ethtool_convert_legacy_u32_to_link_mode(cmd->link_modes.lp_advertising,
-                                                lp_advertising);
+                                                lpa_adv);
+
         cmd->base.autoneg = autoneg;
         cmd->base.speed = speed;
         cmd->base.duplex = duplex;
@@ -7331,7 +7476,7 @@ rtl8168_get_ethtool_stats(struct net_device *dev,
 
         counters = tp->tally_vaddr;
         paddr = tp->tally_paddr;
-        if (!counters)
+        if (!counters || test_bit(R8168_FLAG_SHUTDOWN, tp->task_flags))
                 return;
 
         rtl8168_dump_tally_counter(tp, paddr);
@@ -7432,7 +7577,7 @@ static int rtl_get_eeprom(struct net_device *dev, struct ethtool_eeprom *eeprom,
                 if (ret)
                         break;
 
-                pci_read_config_dword(tp->pci_dev, VPD_data, &eeprom_buff[i-start_w]);
+                eeprom_buff[i-start_w] = rtl8168_pci_config_read(tp, VPD_data);
         }
         rtl8168_disable_cfg9346_write(tp);
 
@@ -7999,8 +8144,6 @@ rtl8168_adv_to_linkmode(unsigned long *mode, u64 adv)
                 linkmode_set_bit(ETHTOOL_LINK_MODE_1000baseT_Half_BIT, mode);
         if (adv & ADVERTISED_1000baseT_Full)
                 linkmode_set_bit(ETHTOOL_LINK_MODE_1000baseT_Full_BIT, mode);
-        if (adv & ADVERTISED_2500baseX_Full)
-                linkmode_set_bit(ETHTOOL_LINK_MODE_2500baseT_Full_BIT, mode);
 }
 
 static int
@@ -8072,13 +8215,8 @@ rtl_ethtool_set_eee(struct net_device *net, struct ethtool_keee *edata)
         }
 
         rtl8168_adv_to_linkmode(advertising, tp->advertising);
-        if (linkmode_empty(edata->advertised)) {
+        if (linkmode_empty(edata->advertised))
                 linkmode_and(edata->advertised, advertising, eee->supported);
-        } else if (linkmode_andnot(tmp, edata->advertised, advertising)) {
-                dev_printk(KERN_WARNING, tp_to_dev(tp), "EEE advertised must be a subset of autoneg advertised speeds\n");
-                rc = -EINVAL;
-                goto out;
-        }
 
         if (linkmode_andnot(tmp, edata->advertised, eee->supported)) {
                 dev_printk(KERN_WARNING, tp_to_dev(tp), "EEE advertised must be a subset of support \n");
@@ -8701,9 +8839,8 @@ exit:
 
 static
 bool
-rtl8168_wait_phy_state_ready(struct rtl8168_private *tp,
-                             u16 PhyState,
-                             u32 MicroSecondTimeout
+rtl8168_wait_phy_state_ready(struct rtl8168_private *tp, u16 PhyState,
+                             u32 usec
                             )
 {
         u16 TmpPhyState;
@@ -8714,8 +8851,7 @@ rtl8168_wait_phy_state_ready(struct rtl8168_private *tp,
         if (HW_SUPPORT_UPS_MODE(tp) == FALSE)
                 goto exit;
 
-        WaitCount = MicroSecondTimeout / 1000;
-        if (WaitCount == 0) WaitCount = 100;
+        WaitCount =  max(usec / 1000, 100);
 
         do {
                 TmpPhyState = rtl8168_get_phy_state(tp);
@@ -8768,7 +8904,7 @@ rtl8168_test_phy_ocp_v2(struct rtl8168_private *tp)
         PhyRegValue = rtl8168_mdio_read(tp, 0x12);
         if ((PhyRegValue & 0x03) != 0x00) {
                 u32 WaitCnt = 0;
-                while ((PhyRegValue & 0x03) != 0x00 && WaitCnt < 5) {
+                while ((PhyRegValue & 0x03) != 0x00 && WaitCnt < 50) {
                         rtl8168_mdio_write(tp, 0x1F, 0x0C40);
                         rtl8168_set_eth_phy_bit(tp, 0x11, (BIT_15 | BIT_14));
                         rtl8168_clear_eth_phy_bit(tp, 0x11, (BIT_15 | BIT_14));
@@ -8791,7 +8927,7 @@ rtl8168_test_phy_ocp_v2(struct rtl8168_private *tp)
         rtl8168_mdio_write(tp, 0x1F, 0x0A46);
         rtl8168_set_eth_phy_bit(tp, 0x14, BIT_0);
         rtl8168_mdio_write(tp, 0x1F, 0x0000);
-        rtl8168_wait_phy_state_ready(tp, HW_PHY_STATUS_LAN_ON, 500000);
+        rtl8168_wait_phy_state_ready(tp, HW_PHY_STATUS_LAN_ON, 100000);
 
         tp->HwHasWrRamCodeToMicroP = FALSE;
 
@@ -8853,7 +8989,7 @@ rtl8168_test_phy_ocp_v3(struct rtl8168_private *tp)
         PhyRegValue = rtl8168_mdio_read(tp, 0x12);
         if ((PhyRegValue & 0x03) != 0x00) {
                 u32 WaitCnt = 0;
-                while ((PhyRegValue & 0x03) != 0x00 && WaitCnt < 5) {
+                while ((PhyRegValue & 0x03) != 0x00 && WaitCnt < 50) {
                         rtl8168_mdio_write(tp, 0x1F, 0x0C40);
                         rtl8168_set_eth_phy_bit(tp, 0x11, (BIT_15 | BIT_14));
                         rtl8168_clear_eth_phy_bit(tp, 0x11, (BIT_15 | BIT_14));
@@ -8878,7 +9014,7 @@ rtl8168_test_phy_ocp_v3(struct rtl8168_private *tp)
         rtl8168_mdio_write(tp, 0x1F, 0x0A46);
         rtl8168_set_eth_phy_bit(tp, 0x14, BIT_0);
         rtl8168_mdio_write(tp, 0x1F, 0x0000);
-        rtl8168_wait_phy_state_ready(tp, HW_PHY_STATUS_LAN_ON, 500000);
+        rtl8168_wait_phy_state_ready(tp, HW_PHY_STATUS_LAN_ON, 100000);
 
         //record fail case
         rtl8168_mdio_write(tp, 0x1F, 0x0A43);
@@ -10725,9 +10861,9 @@ rtl8168_hw_init(struct net_device *dev)
                         rtl8168_disable_ocp_phy_power_saving(dev);
 
         //Set PCIE uncorrectable error status mask pcie 0x108
-        csi_tmp = rtl8168_csi_read(tp, 0x108);
+        csi_tmp = rtl8168_pci_config_read(tp, 0x108);
         csi_tmp |= BIT_20;
-        rtl8168_csi_write(tp, 0x108, csi_tmp);
+        rtl8168_pci_config_write(tp, 0x108, csi_tmp);
 
         switch (tp->mcfg) {
         case CFG_METHOD_21:
@@ -27724,6 +27860,7 @@ static int rtl8168_siocdevprivate(struct net_device *dev, struct ifreq *ifr,
                                   void __user *data, int cmd)
 {
         struct rtl8168_private *tp = netdev_priv(dev);
+        struct ifreq ifrdata = { .ifr_data = data };
         int ret = 0;
 
         switch (cmd) {
@@ -27733,7 +27870,7 @@ static int rtl8168_siocdevprivate(struct net_device *dev, struct ifreq *ifr,
                         break;
                 }
 
-                ret = rtl8168_asf_ioctl(dev, ifr);
+                ret = rtl8168_asf_ioctl(dev, &ifrdata);
                 break;
 
 #ifdef ENABLE_DASH_SUPPORT
@@ -27748,7 +27885,7 @@ static int rtl8168_siocdevprivate(struct net_device *dev, struct ifreq *ifr,
                         break;
                 }
 
-                ret = rtl8168_dash_ioctl(dev, ifr);
+                ret = rtl8168_dash_ioctl(dev, &ifrdata);
                 break;
 #endif
 
@@ -27764,7 +27901,7 @@ static int rtl8168_siocdevprivate(struct net_device *dev, struct ifreq *ifr,
                         break;
                 }
 
-                ret = rtl8168_realwow_ioctl(dev, ifr);
+                ret = rtl8168_realwow_ioctl(dev, &ifrdata);
                 break;
 #endif
 
@@ -27774,7 +27911,7 @@ static int rtl8168_siocdevprivate(struct net_device *dev, struct ifreq *ifr,
                         break;
                 }
 
-                ret = rtl8168_tool_ioctl(tp, ifr);
+                ret = rtl8168_tool_ioctl(tp, &ifrdata);
                 break;
 
         default:
@@ -28008,12 +28145,13 @@ rtl8168_init_board(struct pci_dev *pdev,
         tp->pci_dev = pdev;
         tp->msg_enable = netif_msg_init(debug.msg_enable, R8168_MSG_DEFAULT);
 
-        if (!aspm || tp->mcfg == CFG_METHOD_9) {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26)
+        if (aspm && tp->mcfg != CFG_METHOD_9)
+                pci_disable_link_state(pdev, PCIE_LINK_STATE_L0S);
+        else
                 pci_disable_link_state(pdev, PCIE_LINK_STATE_L0S | PCIE_LINK_STATE_L1 |
                                        PCIE_LINK_STATE_CLKPM);
 #endif
-        }
 
         /* enable device (incl. PCI PM wakeup and hotplug setup) */
         rc = pci_enable_device(pdev);
@@ -28271,17 +28409,17 @@ rtl8168_esd_checker(struct rtl8168_private *tp)
         }
 
         if (tp->HwPcieSNOffset > 0) {
-                pci_sn_l = rtl8168_csi_read(tp, tp->HwPcieSNOffset);
+                pci_sn_l = rtl8168_pci_config_read(tp, tp->HwPcieSNOffset);
                 if (pci_sn_l != tp->pci_cfg_space.pci_sn_l) {
                         printk(KERN_ERR "%s: pci_sn_l = 0x%08x, should be 0x%08x \n.", dev->name, pci_sn_l, tp->pci_cfg_space.pci_sn_l);
-                        rtl8168_csi_write(tp, tp->HwPcieSNOffset, tp->pci_cfg_space.pci_sn_l);
+                        rtl8168_pci_config_write(tp, tp->HwPcieSNOffset, tp->pci_cfg_space.pci_sn_l);
                         tp->esd_flag |= BIT_13;
                 }
 
-                pci_sn_h = rtl8168_csi_read(tp, tp->HwPcieSNOffset + 4);
+                pci_sn_h = rtl8168_pci_config_read(tp, tp->HwPcieSNOffset + 4);
                 if (pci_sn_h != tp->pci_cfg_space.pci_sn_h) {
                         printk(KERN_ERR "%s: pci_sn_h = 0x%08x, should be 0x%08x \n.", dev->name, pci_sn_h, tp->pci_cfg_space.pci_sn_h);
-                        rtl8168_csi_write(tp, tp->HwPcieSNOffset + 4, tp->pci_cfg_space.pci_sn_h);
+                        rtl8168_pci_config_write(tp, tp->HwPcieSNOffset + 4, tp->pci_cfg_space.pci_sn_h);
                         tp->esd_flag |= BIT_14;
                 }
         }
@@ -28837,7 +28975,7 @@ rtl8168_init_one(struct pci_dev *pdev,
         rtl8168_sysfs_init(dev);
 #endif /* ENABLE_R8168_SYSFS */
 
-        printk("%s", GPL_CLAIM);
+        printk(KERN_INFO "%s", GPL_CLAIM);
 
 out:
         return rc;
@@ -28873,9 +29011,6 @@ rtl8168_remove_one(struct pci_dev *pdev)
 
         rtl8168_cancel_all_schedule_work(tp);
 
-#ifdef  CONFIG_R8168_NAPI
-        rtl8168_del_napi(tp);
-#endif
         if (HW_DASH_SUPPORT_DASH(tp))
                 rtl8168_driver_stop(tp);
 
@@ -28903,6 +29038,9 @@ rtl8168_remove_one(struct pci_dev *pdev)
 #endif //ENABLE_R8168_SYSFS
 
         unregister_netdev(dev);
+#ifdef  CONFIG_R8168_NAPI
+        rtl8168_del_napi(tp);
+#endif
         rtl8168_disable_msi(pdev, tp);
 #ifdef ENABLE_R8168_PROCFS
         rtl8168_proc_remove(dev);
@@ -29254,8 +29392,8 @@ _rtl8168_set_l1_l0s_entry_latency(struct rtl8168_private *tp, u8 setting)
         /*set PCI configuration space offset 0x70F to setting*/
         /*When the register offset of PCI configuration space larger than 0xff, use CSI to access it.*/
 
-        csi_tmp = rtl8168_csi_read(tp, 0x70c) & 0xc0ffffff;
-        rtl8168_csi_write(tp, 0x70c, csi_tmp | temp);
+        csi_tmp = rtl8168_pci_config_read(tp, 0x70c) & 0xc0ffffff;
+        rtl8168_pci_config_write(tp, 0x70c, csi_tmp | temp);
 }
 
 static void
@@ -29314,8 +29452,8 @@ _rtl8168_set_eios_opt(struct rtl8168_private *tp, u8 setting)
         temp = temp << 12;
         /*set PCI configuration space offset 0x711 to setting*/
 
-        csi_tmp = rtl8168_csi_read(tp, 0x710) & 0xffff0fff;
-        rtl8168_csi_write(tp, 0x710, csi_tmp | temp);
+        csi_tmp = rtl8168_pci_config_read(tp, 0x710) & 0xffff0fff;
+        rtl8168_pci_config_write(tp, 0x710, csi_tmp | temp);
 }
 
 static void
@@ -30370,8 +30508,8 @@ rtl8168_hw_config(struct net_device *dev)
                 pci_read_config_word(pdev, PCI_SUBSYSTEM_VENDOR_ID, &tp->pci_cfg_space.resv_0x2c_l);
                 pci_read_config_word(pdev, PCI_SUBSYSTEM_VENDOR_ID + 2, &tp->pci_cfg_space.resv_0x2c_h);
                 if (tp->HwPcieSNOffset > 0) {
-                        tp->pci_cfg_space.pci_sn_l = rtl8168_csi_read(tp, tp->HwPcieSNOffset);
-                        tp->pci_cfg_space.pci_sn_h = rtl8168_csi_read(tp, tp->HwPcieSNOffset + 4);
+                        tp->pci_cfg_space.pci_sn_l = rtl8168_pci_config_read(tp, tp->HwPcieSNOffset);
+                        tp->pci_cfg_space.pci_sn_h = rtl8168_pci_config_read(tp, tp->HwPcieSNOffset + 4);
                 }
 
                 tp->pci_cfg_is_read = 1;
@@ -30941,10 +31079,6 @@ _rtl8168_wait_for_quiescence(struct net_device *dev)
         rtl8168_disable_napi(tp);
 #endif//CONFIG_R8168_NAPI
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,5,67)
-        /* Give a racing hard_start_xmit a few cycles to complete. */
-        synchronize_net();
-#endif
         rtl8168_irq_mask_and_ack(tp);
 
         rtl8168_wait_for_irq_complete(tp);
@@ -31551,6 +31685,12 @@ err_stop:
         goto out;
 }
 
+void
+rtl8168_desc_quirk(struct rtl8168_private *tp)
+{
+        RTL_R8(tp, tp->imr_reg[0]);
+}
+
 static void
 rtl8168_tx_interrupt(struct rtl8168_tx_ring *ring, int budget)
 {
@@ -31578,10 +31718,18 @@ rtl8168_tx_interrupt(struct rtl8168_tx_ring *ring, int budget)
                 struct ring_info *tx_skb = ring->tx_skb + entry;
                 u32 status;
 
-                rmb();
                 status = le32_to_cpu(READ_ONCE(ring->TxDescArray[entry].opts1));
-                if (status & DescOwn)
-                        break;
+                if (status & DescOwn) {
+                        if (!tp->recheck_desc_ownbit)
+                                break;
+
+                        tp->recheck_desc_ownbit = FALSE;
+
+                        rtl8168_desc_quirk(tp);
+                        status = le32_to_cpu(READ_ONCE(ring->TxDescArray[entry].opts1));
+                        if (status & DescOwn)
+                                break;
+                }
 
                 rtl8168_unmap_tx_skb(tp->pci_dev,
                                      tx_skb,
@@ -31613,7 +31761,7 @@ rtl8168_tx_interrupt(struct rtl8168_tx_ring *ring, int budget)
                 WRITE_ONCE(ring->dirty_tx, dirty_tx);
                 smp_wmb();
                 if (netif_queue_stopped(dev) &&
-                    (rtl8168_tx_slots_avail(tp, ring))) {
+                    rtl8168_tx_slots_avail(tp, ring) && netif_carrier_ok(dev)) {
                         netif_start_subqueue(dev, ring->index);
                 }
                 smp_rmb();
@@ -31759,7 +31907,12 @@ rtl8168_rx_interrupt(struct net_device *dev,
                 desc = rtl8168_get_rxdesc(tp, tp->RxDescArray, entry, ring_index);
                 status = le32_to_cpu(READ_ONCE(desc->opts1));
                 if (status & DescOwn) {
-                        RTL_R8(tp, tp->imr_reg[0]);
+                        if (!tp->recheck_desc_ownbit)
+                                break;
+
+                        tp->recheck_desc_ownbit = FALSE;
+
+                        rtl8168_desc_quirk(tp);
                         status = le32_to_cpu(READ_ONCE(desc->opts1));
                         if (status & DescOwn)
                                 break;
@@ -31937,6 +32090,8 @@ static irqreturn_t rtl8168_interrupt(int irq, void *dev_instance)
                         rtl8168_schedule_dash_work(tp);
 #endif
 
+                tp->recheck_desc_ownbit = TRUE;
+
 #ifdef CONFIG_R8168_NAPI
                 if ((status & tp->intr_mask) ||
                     (other_q_status & other_q_intr_mask) ||
@@ -32022,19 +32177,18 @@ static irqreturn_t rtl8168_interrupt_msix(int irq, void *dev_instance)
                         rtl8168_schedule_dash_work(tp);
 #endif
 
-#ifdef CONFIG_R8168_NAPI
-                if (likely(RTL_NETIF_RX_SCHEDULE_PREP(dev, &r8168napi->napi))) {
-                        rtl8168_disable_interrupt_by_vector(tp, message_id);
-                        __RTL_NETIF_RX_SCHEDULE(dev, &r8168napi->napi);
-                } else if (netif_msg_intr(tp))
-                        printk(KERN_INFO "%s: interrupt message id %d in poll_msix\n",
-                               dev->name, message_id);
-                rtl8168_self_clear_isr_by_vector(tp, message_id);
-#else
+                tp->recheck_desc_ownbit = TRUE;
+
                 rtl8168_disable_interrupt_by_vector(tp, message_id);
 
                 rtl8168_self_clear_isr_by_vector(tp, message_id);
-
+#ifdef CONFIG_R8168_NAPI
+                if (likely(RTL_NETIF_RX_SCHEDULE_PREP(dev, &r8168napi->napi)))
+                        __RTL_NETIF_RX_SCHEDULE(dev, &r8168napi->napi);
+                else if (netif_msg_intr(tp))
+                        printk(KERN_INFO "%s: interrupt message id %d in poll_msix\n",
+                               dev->name, message_id);
+#else
                 if (message_id == 0)
                         rtl8168_tx_all_interrupt(tp, budget);
 
@@ -32236,6 +32390,8 @@ static void rtl8168_shutdown(struct pci_dev *pdev)
         struct net_device *dev = pci_get_drvdata(pdev);
         struct rtl8168_private *tp = netdev_priv(dev);
 
+        rtl8168_cancel_all_schedule_work(tp);
+
         rtnl_lock();
 
         if (HW_DASH_SUPPORT_DASH(tp))
@@ -32323,6 +32479,8 @@ rtl8168_suspend(struct pci_dev *pdev, pm_message_t state)
 #endif
         rtnl_lock();
 
+        set_bit(R8168_FLAG_SUSPEND, tp->task_flags);
+
         if (!netif_running(dev))
                 goto out;
 
@@ -32391,6 +32549,8 @@ rtl8168_resume(struct device *device)
         int err;
 
         rtnl_lock();
+
+        set_bit(R8168_FLAG_SUSPEND, tp->task_flags);
 
         err = pci_enable_device(pdev);
         if (err) {

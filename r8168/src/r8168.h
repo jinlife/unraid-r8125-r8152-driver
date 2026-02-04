@@ -5,7 +5,7 @@
 # r8168 is the Linux device driver released for Realtek Gigabit Ethernet
 # controllers with PCI-Express interface.
 #
-# Copyright(c) 2024 Realtek Semiconductor Corp. All rights reserved.
+# Copyright(c) 2025 Realtek Semiconductor Corp. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the Free
@@ -512,12 +512,12 @@ do { \
 #define RSS_SUFFIX ""
 #endif
 
-#define RTL8168_VERSION "8.055.00" NAPI_SUFFIX FIBER_SUFFIX REALWOW_SUFFIX DASH_SUFFIX RSS_SUFFIX
+#define RTL8168_VERSION "8.056.02" NAPI_SUFFIX FIBER_SUFFIX REALWOW_SUFFIX DASH_SUFFIX RSS_SUFFIX
 #define MODULENAME "r8168"
 #define PFX MODULENAME ": "
 
 #define GPL_CLAIM "\
-r8168  Copyright (C) 2024 Realtek NIC software team <nicfae@realtek.com> \n \
+r8168  Copyright (C) 2025 Realtek NIC software team <nicfae@realtek.com> \n \
 This program comes with ABSOLUTELY NO WARRANTY; for details, please see <http://www.gnu.org/licenses/>. \n \
 This is free software, and you are welcome to redistribute it under certain conditions; see <http://www.gnu.org/licenses/>. \n"
 
@@ -1763,6 +1763,8 @@ enum r8168_flag {
         R8168_FLAG_TASK_ESD_CHECK_PENDING,
         R8168_FLAG_TASK_LINKCHG_CHECK_PENDING,
         R8168_FLAG_TASK_DASH_CHECK_PENDING,
+        R8168_FLAG_SHUTDOWN,
+        R8168_FLAG_SUSPEND,
         R8168_FLAG_MAX
 };
 
@@ -2172,6 +2174,8 @@ struct rtl8168_private {
         u16 BackupPhyFuseDout_63_48;
 
         u8 ring_lib_enabled;
+
+        u8 recheck_desc_ownbit;
 
         const char *fw_name;
         struct rtl8168_fw *rtl_fw;
@@ -2616,6 +2620,7 @@ void rtl8168_hw_start(struct net_device *dev);
 void rtl8168_hw_reset(struct net_device *dev);
 void rtl8168_tx_clear(struct rtl8168_private *tp);
 void rtl8168_rx_clear(struct rtl8168_private *tp);
+void rtl8168_desc_quirk(struct rtl8168_private *tp);
 int rtl8168_init_ring(struct net_device *dev);
 int rtl8168_dump_tally_counter(struct rtl8168_private *tp, dma_addr_t paddr);
 void rtl8168_enable_napi(struct rtl8168_private *tp);
