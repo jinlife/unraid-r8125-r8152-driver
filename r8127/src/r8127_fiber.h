@@ -5,7 +5,7 @@
 # r8127 is the Linux device driver released for Realtek 10 Gigabit Ethernet
 # controllers with PCI-Express interface.
 #
-# Copyright(c) 2025 Realtek Semiconductor Corp. All rights reserved.
+# Copyright(c) 2026 Realtek Semiconductor Corp. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the Free
@@ -51,5 +51,8 @@ void rtl8127_sds_phy_write_8127(struct rtl8127_private *tp, u16 index, u16 page,
                                 u16 reg, u16 val);
 void rtl8127_hw_fiber_phy_config(struct rtl8127_private *tp);
 bool rtl8127_check_fiber_mode_support(struct rtl8127_private *tp);
+bool rtl8127_sds_If_i2c_is_10g_sfp_cap(struct rtl8127_private *tp);
+bool rtl8127_sds_sfp_connected_8127(struct rtl8127_private *tp);
+void _rtl8127_set_sds_phy_caps_8127(struct rtl8127_private *tp, u32 cap);
 
 #endif /* _LINUX_R8127_FIBER_H */

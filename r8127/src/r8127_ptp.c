@@ -5,7 +5,7 @@
 # r8127 is the Linux device driver released for Realtek 10 Gigabit Ethernet
 # controllers with PCI-Express interface.
 #
-# Copyright(c) 2025 Realtek Semiconductor Corp. All rights reserved.
+# Copyright(c) 2026 Realtek Semiconductor Corp. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the Free
@@ -293,6 +293,8 @@ static int rtl8127_phc_settime(struct ptp_clock_info *ptp,
         return ret;
 }
 
+#define R8127_PPS_TIMER_INTERVAL 1000000000
+
 static void _rtl8127_phc_enable(struct ptp_clock_info *ptp,
                                 struct ptp_clock_request *rq, int on)
 {
@@ -327,7 +329,7 @@ static void _rtl8127_phc_enable(struct ptp_clock_info *ptp,
                 r8127_spin_unlock(&tp->phy_lock, flags);
 
                 /* start hrtimer */
-                hrtimer_start(&tp->pps_timer, 1000000000, HRTIMER_MODE_REL);
+                hrtimer_start(&tp->pps_timer, ktime_set(0, R8127_PPS_TIMER_INTERVAL), HRTIMER_MODE_REL);
         } else
                 tp->pps_enable = 0;
 }
@@ -724,7 +726,7 @@ rtl8127_hrtimer_for_pps(struct hrtimer *timer) {
 
                 r8127_spin_unlock(&tp->phy_lock, flags);
 
-                hrtimer_forward_now(&tp->pps_timer, 1000000000); //rekick
+                hrtimer_forward_now(&tp->pps_timer, ktime_set(0, R8127_PPS_TIMER_INTERVAL)); //rekick
                 return HRTIMER_RESTART;
         } else
                 return HRTIMER_NORESTART;
@@ -751,8 +753,16 @@ void rtl8127_ptp_init(struct rtl8127_private *tp)
 
         /* init a hrtimer for pps */
         tp->pps_enable = 0;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,13,0)
         hrtimer_init(&tp->pps_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
         tp->pps_timer.function = rtl8127_hrtimer_for_pps;
+#else
+        hrtimer_setup(&tp->pps_timer, rtl8127_hrtimer_for_pps, CLOCK_MONOTONIC,
+                      HRTIMER_MODE_REL);
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(6,13,0) */
+
+        tp->hwtstamp_config.rx_filter = HWTSTAMP_FILTER_NONE;
+        tp->hwtstamp_config.tx_type = HWTSTAMP_TX_OFF;
 
         /* reset the PTP related hardware bits */
         rtl8127_ptp_reset(tp);

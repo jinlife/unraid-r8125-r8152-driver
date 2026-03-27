@@ -5,7 +5,7 @@
 # r8127 is the Linux device driver released for Realtek 10 Gigabit Ethernet
 # controllers with PCI-Express interface.
 #
-# Copyright(c) 2025 Realtek Semiconductor Corp. All rights reserved.
+# Copyright(c) 2026 Realtek Semiconductor Corp. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the Free
@@ -212,6 +212,20 @@ static inline void fsleep(unsigned long usecs)
                 msleep(DIV_ROUND_UP(usecs, 1000));
 }
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5,8,0) */
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,4,92)
+/* Iterate through singly-linked GSO fragments of an skb. */
+#define skb_list_walk_safe(first, skb, next_skb)                               \
+	for ((skb) = (first), (next_skb) = (skb) ? (skb)->next : NULL; (skb);  \
+	     (skb) = (next_skb), (next_skb) = (skb) ? (skb)->next : NULL)
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5,4,92) */
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,14,217)
+static inline void skb_mark_not_on_list(struct sk_buff *skb)
+{
+        skb->next = NULL;
+}
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(4,14,217) */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5,2,0)
 #define netdev_xmit_more() (0)
@@ -435,6 +449,13 @@ do { \
 
 #if !defined(HAVE_FREE_NETDEV) && (LINUX_VERSION_CODE < KERNEL_VERSION(3,1,0))
 #define free_netdev(x)  kfree(x)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
+#define RTL_NAPI_DEL(priv)
+#else
+#define RTL_NAPI_DEL(priv)   netif_napi_del(&priv->napi)
+#endif //LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
+#else
+#define RTL_NAPI_DEL(priv)
 #endif
 
 #ifndef SET_NETDEV_DEV
@@ -618,12 +639,12 @@ static inline u32 rtl8127_ethtool_adv_to_mmd_eee_adv_cap2_t(u32 adv)
 #define RSS_SUFFIX ""
 #endif
 
-#define RTL8127_VERSION "11.015.00" NAPI_SUFFIX DASH_SUFFIX REALWOW_SUFFIX PTP_SUFFIX RSS_SUFFIX
+#define RTL8127_VERSION "11.016.00" NAPI_SUFFIX DASH_SUFFIX REALWOW_SUFFIX PTP_SUFFIX RSS_SUFFIX
 #define MODULENAME "r8127"
 #define PFX MODULENAME ": "
 
 #define GPL_CLAIM "\
-r8127  Copyright (C) 2025 Realtek NIC software team <nicfae@realtek.com> \n \
+r8127  Copyright (C) 2026 Realtek NIC software team <nicfae@realtek.com> \n \
 This program comes with ABSOLUTELY NO WARRANTY; for details, please see <http://www.gnu.org/licenses/>. \n \
 This is free software, and you are welcome to redistribute it under certain conditions; see <http://www.gnu.org/licenses/>. \n"
 
@@ -698,6 +719,7 @@ This is free software, and you are welcome to redistribute it under certain cond
 #define Jumbo_Frame_7k  (7*1024 - ETH_HLEN - VLAN_HLEN - ETH_FCS_LEN)
 #define Jumbo_Frame_8k  (8*1024 - ETH_HLEN - VLAN_HLEN - ETH_FCS_LEN)
 #define Jumbo_Frame_9k  (9*1024 - ETH_HLEN - VLAN_HLEN - ETH_FCS_LEN)
+#define Jumbo_Frame_16k (16*1024 - ETH_HLEN - VLAN_HLEN - ETH_FCS_LEN)
 #define InterFrameGap   0x03    /* 3 means InterFrameGap = the shortest one */
 #define RxEarly_off_V1 (0x07 << 11)
 #define RxEarly_off_V2 (1 << 11)
@@ -727,11 +749,13 @@ This is free software, and you are welcome to redistribute it under certain cond
 #define R8127_MAX_MSIX_VEC   64
 #define R8127_MAX_RX_QUEUES_VEC_V3 (16)
 #define R8127_MAX_RX_QUEUES_VEC_V4 (8)
+#define R8127_RX_QUEUE_NUM (8)
 
 #define RTL8127_TX_TIMEOUT  (6 * HZ)
 #define RTL8127_LINK_TIMEOUT    (1 * HZ)
 #define RTL8127_ESD_TIMEOUT (2 * HZ)
 #define RTL8127_DASH_TIMEOUT    (0)
+#define RTL8127_CHECK_SDS_SFP_CAP_TIMEOUT (2 * HZ)
 
 #define rtl8127_rx_page_size(order) (PAGE_SIZE << order)
 
@@ -752,11 +776,12 @@ This is free software, and you are welcome to redistribute it under certain cond
 #define RT_VALN_HLEN 4      /* 4(single vlan) bytes */
 #endif
 
-#define R8127_MAX_TX_QUEUES (2)
+#define R8127_MAX_TX_QUEUES (8)
 #define R8127_MAX_RX_QUEUES_V2 (4)
 #define R8127_MAX_RX_QUEUES_V3 (16)
 #define R8127_MAX_RX_QUEUES R8127_MAX_RX_QUEUES_V3
 #define R8127_MAX_QUEUES R8127_MAX_RX_QUEUES
+#define R8127_TX_QUEUE_NUM (8)
 
 #define OCP_STD_PHY_BASE	0xa400
 
@@ -978,12 +1003,6 @@ typedef int napi_budget;
 #define RTL_NAPI_ENABLE(dev, napi)          napi_enable(napi)
 #define RTL_NAPI_DISABLE(dev, napi)         napi_disable(napi)
 #endif  //LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
-#define RTL_NAPI_DEL(priv)
-#else
-#define RTL_NAPI_DEL(priv)   netif_napi_del(&priv->napi)
-#endif //LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
 
 /*****************************************************************************/
 #ifdef CONFIG_R8127_NAPI
@@ -1489,7 +1508,10 @@ enum RTL8127_registers {
         INT_CFG1_8125   = 0x7A,
         EPHY_RXER_NUM   = 0x7C,
         EPHYAR          = 0x80,
+        LEDSEL_2_8125   = 0x84,
+        LEDSEL_1_8125   = 0x86,
         TimeInt2        = 0x8C,
+        LEDSEL_3_8125   = 0x96,
         OCPDR           = 0xB0,
         MACOCP          = 0xB0,
         OCPAR           = 0xB4,
@@ -1934,6 +1956,10 @@ enum _DescStatusBit {
         LargeSend   = (1 << 27), /* TCP Large Send Offload (TSO) */
         GiantSendv4 = (1 << 26), /* TCP Giant Send Offload V4 (GSOv4) */
         GiantSendv6 = (1 << 25), /* TCP Giant Send Offload V6 (GSOv6) */
+        GiantSendEn_V3 = (1 << 16), /* Giant Send Offload Enable V3 */
+        GiantSendv4_V3 = (1 << 29), /* IPv4 Giant Send Offload V3 */
+        GiantSendv6_V3 = (0), /* IPv6 Giant Send Offload V3 */
+        GiantSendTCP_V3 = (1 << 30), /* TCP Giant Send Offload V3 */
         LargeSend_DP = (1 << 16), /* TCP Large Send Offload (TSO) */
         MSSShift    = 16,        /* MSS value position */
         MSSMask     = 0x7FFU,    /* MSS value 11 bits */
@@ -2065,6 +2091,10 @@ enum bits {
         BIT_31 = (1 << 31)
 };
 
+/* Phy Fuse Dout */
+#define R8127_PHY_FUSE_DOUT_NUM (32)
+#define R8127_MAX_PHY_FUSE_DOUT_NUM R8127_PHY_FUSE_DOUT_NUM
+
 #define RTL8127_CP_NUM 4
 #define RTL8127_MAX_SUPPORT_CP_LEN 110
 
@@ -2087,14 +2117,11 @@ enum efuse {
 #define RsvdMaskV3  0x3fff8000
 #define RsvdMaskV4  RsvdMaskV3
 
+/* Tx desc V3 */
 struct TxDesc {
         u32 opts1;
         u32 opts2;
         u64 addr;
-        u32 reserved0;
-        u32 reserved1;
-        u32 reserved2;
-        u32 reserved3;
 };
 
 struct RxDesc {
@@ -2234,6 +2261,9 @@ enum r8127_flag {
         R8127_FLAG_TASK_ESD_CHECK_PENDING,
         R8127_FLAG_TASK_LINKCHG_CHECK_PENDING,
         R8127_FLAG_TASK_DASH_CHECK_PENDING,
+        R8127_FLAG_TASK_SDS_SFP_CAP_PENDING,
+        R8127_FLAG_SHUTDOWN,
+        R8127_FLAG_SUSPEND,
         R8127_FLAG_MAX
 };
 
@@ -2646,11 +2676,13 @@ struct rtl8127_private {
         struct work_struct esd_task;
         struct work_struct linkchg_task;
         struct work_struct dash_task;
+        struct sds_sfp_cap_task dash_task;
 #else
         struct delayed_work reset_task;
         struct delayed_work esd_task;
         struct delayed_work linkchg_task;
         struct delayed_work dash_task;
+        struct delayed_work sds_sfp_cap_task;
 #endif
         DECLARE_BITMAP(task_flags, R8127_FLAG_MAX);
         unsigned features;
@@ -2691,11 +2723,13 @@ struct rtl8127_private {
 
         u8 RequirePhyMdiSwapPatch;
 
+        u32 HwSerDesSfpCap;
+
         u32 HwFiberModeVer;
         u32 HwFiberStat;
         u8 HwSwitchMdiToFiber;
 
-        u16 NicCustLedValue;
+        u16 BackupLedSel[4];
 
         u8 HwSuppMagicPktVer;
 
@@ -2711,6 +2745,10 @@ struct rtl8127_private {
         u16 phy_reg_status_2500;
 
         u32 HwPcieSNOffset;
+
+        u8 HwSuppEsdVer;
+        u8 TestPhyOcpReg;
+        u16 BackupPhyFuseDout[R8127_MAX_PHY_FUSE_DOUT_NUM];
 
         u32 MaxTxDescPtrMask;
         u8 HwSuppTxNoCloseVer;
@@ -2730,6 +2768,8 @@ struct rtl8127_private {
         u8 D0SpeedUpSpeed;
 
         u8 ring_lib_enabled;
+
+        u8 recheck_desc_ownbit;
 
         const char *fw_name;
         struct rtl8127_fw *rtl_fw;
@@ -2759,18 +2799,11 @@ struct rtl8127_private {
         u32 OobReqComplete;
         u32 OobAckComplete;
 
-        u8 RcvFwReqSysOkEvt;
-        u8 RcvFwDashOkEvt;
-        u8 SendFwHostOkEvt;
-
-        u8 DashFwDisableRx;
-
         u8 SendingToFw;
 
         u32 RecvFromDashFwCnt;
 
         u8 DashReqRegValue;
-        u16 HostReqValue;
 
         //Dash-----------------
 #endif //ENABLE_DASH_SUPPORT
@@ -2837,6 +2870,7 @@ struct rtl8127_private {
         u16 MacMcuPageSize;
         u64 hw_mcu_patch_code_ver;
         u64 bin_mcu_patch_code_ver;
+        u8 hw_has_mac_mcu_patch_code;
 
         u8 HwSuppTcamVer;
 
@@ -2943,13 +2977,17 @@ enum mcfg {
 
 //Ram Code Version
 #define NIC_RAMCODE_VERSION_CFG_METHOD_1 (0x0015)
-#define NIC_RAMCODE_VERSION_CFG_METHOD_2 (0x0036)
+#define NIC_RAMCODE_VERSION_CFG_METHOD_2 (0x0051)
 
 //hwoptimize
 #define HW_PATCH_SOC_LAN (BIT_0)
 #define HW_PATCH_SAMSUNG_LAN_DONGLE (BIT_2)
 
 static const u16 other_q_intr_mask = (RxOK1 | RxDU1);
+
+#define HW_PHY_STATUS_INI       1
+#define HW_PHY_STATUS_EXT_INI   2
+#define HW_PHY_STATUS_LAN_ON    3
 
 void rtl8127_mdio_write(struct rtl8127_private *tp, u16 RegAddr, u16 value);
 void rtl8127_mdio_prot_write(struct rtl8127_private *tp, u32 RegAddr, u32 value);
